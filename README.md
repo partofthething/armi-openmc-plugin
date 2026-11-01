@@ -4,6 +4,9 @@ An [ARMI](https://partofthething.github.io/armi/) plugin that builds [OpenMC](ht
 Monte Carlo models straight from an ARMI reactor, runs them, and puts the results back on the
 reactor. It is written against the partofthething fork of ARMI (2.0+).
 
+Documentation: https://partofthething.github.io/armi-openmc-plugin/
+Source and issues: https://github.com/partofthething/armi-openmc-plugin
+
 It does two jobs:
 
 | Mode | Setting | What it does |
@@ -51,6 +54,7 @@ PyPI has no OpenMC wheels, so the Python API comes from its release tag; the sol
 docker.
 
 ```bash
+git clone https://github.com/partofthething/armi-openmc-plugin.git && cd armi-openmc-plugin
 uv venv && uv pip install -e .          # armi from the fork's git main, openmc 0.15.3 from git
 uv pip install --no-deps -e ../armi     # optional: a local, editable ARMI fork
 ```
@@ -73,7 +77,8 @@ Another app can register `armi_openmc.plugin.OpenMCPlugin` itself instead.
 
 ## Documentation
 
-Sphinx docs (Book theme) in `doc/`: usage, how the models and cross sections are made, the
+Published at https://partofthething.github.io/armi-openmc-plugin/ (built and deployed by
+`.github/workflows/docs.yaml` on every push to main). Sphinx docs (Book theme) in `doc/`: usage, how the models and cross sections are made, the
 benchmarks with figures, the settings reference, and the roadmap (depletion, variance reduction,
 richer coupling back onto ARMI).
 

@@ -3,7 +3,9 @@ ARMI + OpenMC
 
 **armi-openmc** is an `ARMI <https://partofthething.github.io/armi/>`_ plugin that turns an ARMI
 reactor model into an `OpenMC <https://docs.openmc.org>`_ Monte Carlo model, runs it, and puts the
-results back on the reactor. It works with the partofthething fork of ARMI (2.0 and later).
+results back on the reactor. It works with the partofthething fork of ARMI (2.0 and later). The
+source, issues and examples are at `partofthething/armi-openmc-plugin
+<https://github.com/partofthething/armi-openmc-plugin>`_.
 
 It does two jobs:
 

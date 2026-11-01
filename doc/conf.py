@@ -44,7 +44,14 @@ html_theme = "sphinx_book_theme"
 html_title = "ARMI + OpenMC"
 html_static_path = ["_static"]
 html_last_updated_fmt = "%Y-%m-%d"
+html_baseurl = "https://partofthething.github.io/armi-openmc-plugin/"
 html_theme_options = {
+    "repository_url": "https://github.com/partofthething/armi-openmc-plugin",
+    "repository_branch": "main",
+    "path_to_docs": "doc",
+    "use_repository_button": True,
+    "use_issues_button": True,
+    "use_edit_page_button": True,
     "show_toc_level": 2,
     "home_page_in_toc": True,
     "use_download_button": False,

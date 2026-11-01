@@ -1,0 +1,70 @@
+name: Documentation
+
+# Builds the HTML docs on every push and pull request and publishes them from main to this
+# repository's GitHub Pages site (https://partofthething.github.io/armi-openmc-plugin/).
+#
+# The benchmark figures in doc/_static are committed: they come from OpenMC runs too long for CI
+# (python doc/make_figures.py redraws them after running the examples). The build itself only
+# needs the package importable, for the API pages and the generated settings table.
+#
+# uv, not pip: pyproject.toml takes ARMI (the partofthething fork) and the OpenMC Python API from
+# git through [tool.uv.sources], which pip ignores.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+      - name: Build HTML docs
+        run: |
+          set -x
+          uv venv
+          uv pip install -e ".[docs]"
+          uv run --no-sync sphinx-build -b html -W --keep-going doc doc/_build/html
+      - name: Upload Pages artifact
+        if: github.repository == 'partofthething/armi-openmc-plugin' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: doc/_build/html
+      - name: Archive HTML docs
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: html-docs
+          path: doc/_build/html
+          retention-days: 5
+
+  deploy:
+    # Settings > Pages > Source must be "GitHub Actions".
+    if: github.repository == 'partofthething/armi-openmc-plugin' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,8 +1,9 @@
 Benchmarks
 ==========
 
-All runs use ENDF/B-VIII.1 and OpenMC 0.15.3. Inputs and scripts are in ``examples/``, and
-``doc/make_figures.py`` redraws the figures from their outputs.
+All runs use ENDF/B-VIII.1 and OpenMC 0.15.3. Inputs and scripts are in `examples/
+<https://github.com/partofthething/armi-openmc-plugin/tree/main/examples>`_, and `doc/make_figures.py
+<https://github.com/partofthething/armi-openmc-plugin/blob/main/doc/make_figures.py>`_ redraws the figures from their outputs.
 
 Summary
 -------

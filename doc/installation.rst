@@ -4,6 +4,14 @@ Installation
 The plugin needs three things: ARMI (the partofthething fork), the OpenMC Python API, and an
 OpenMC solver with nuclear data.
 
+Getting the code
+----------------
+
+.. code-block:: bash
+
+   git clone https://github.com/partofthething/armi-openmc-plugin.git
+   cd armi-openmc-plugin
+
 Python packages
 ---------------
 

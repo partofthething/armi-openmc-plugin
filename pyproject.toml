@@ -17,6 +17,11 @@ dependencies = [
     "openmc",
 ]
 
+[project.urls]
+Documentation = "https://partofthething.github.io/armi-openmc-plugin/"
+Repository = "https://github.com/partofthething/armi-openmc-plugin"
+Issues = "https://github.com/partofthething/armi-openmc-plugin/issues"
+
 [project.optional-dependencies]
 test = ["pytest", "ruff==0.17.3"]
 docs = ["sphinx>=8", "sphinx-book-theme>=1.1", "matplotlib"]
