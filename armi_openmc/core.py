@@ -61,7 +61,9 @@ class CoreModelBuilder:
         self.mapper = NuclideMapper(options.crossSectionsPath)
         self.materials = MaterialFactory(self.mapper, options.thermalScattering)
         self.blocks = blockModels.BlockBuilder(
-            self.materials, blockModels.hexOrientationOf(self.grid) if self.isHex else "x"
+            self.materials,
+            blockModels.hexOrientationOf(self.grid) if self.isHex else "x",
+            options=options,
         )
         self._zPlanes = {}
         self._void = openmc.Universe(name="void", cells=[openmc.Cell(name="void")])
@@ -147,7 +149,7 @@ class CoreModelBuilder:
         for b in a:
             if sliceZ is not None and not (b.p.zbottom <= sliceZ < b.p.ztop):
                 continue
-            model = self.blocks.build(b, self._heterogeneous(b))
+            model = self.blocks.build(b, self._heterogeneous(b), zOrigin=b.p.zbottom)
             result.blockModels[b] = model
             if sliceZ is not None:
                 region = None
@@ -169,6 +171,8 @@ class CoreModelBuilder:
 
     # ----------------------------------------------------------------------------------------
     def _coreLattice(self, positions, universes):
+        # Lattice positions without an assembly hold whatever lies outside the assemblies.
+        self._empty = self._outerUniverse()
         coords = {}
         for a, places in positions.items():
             for ij in places:
@@ -178,6 +182,13 @@ class CoreModelBuilder:
             lattice = self._hexLattice(positions)
             half = self.grid.pitch / math.sqrt(3.0)  # circumradius of an assembly
             radius = max(math.hypot(x, y) for x, y in coords) + half
+            if self.options.coreRadius:
+                if self.options.coreRadius < radius:
+                    raise ValueError(
+                        f"openmcCoreRadius {self.options.coreRadius} cm cuts through the "
+                        f"assemblies, which reach {radius:.2f} cm"
+                    )
+                radius = self.options.coreRadius
             extent = ("circle", radius)
         else:
             px, py = (float(p) for p in self.grid.pitch)
@@ -188,15 +199,33 @@ class CoreModelBuilder:
             lattice.lower_left = (min(xs) - px / 2.0, min(ys) - py / 2.0)
             nx = int(round((max(xs) - min(xs)) / px)) + 1
             ny = int(round((max(ys) - min(ys)) / py)) + 1
-            lattice.universes = np.full((ny, nx), self._void, dtype=object)
+            lattice.universes = np.full((ny, nx), self._empty, dtype=object)
             extent = ("box", min(xs) - px / 2, max(xs) + px / 2, min(ys) - py / 2, max(ys) + py / 2)
-        lattice.outer = self._void
+        lattice.outer = self._empty
         grid = lattice.universes
         for (x, y), universe in coords.items():
             idx = lattice.find_element((x, y, 0.0))[0]
             blockModels._setNested(grid, lattice.get_universe_index(idx), universe)
         lattice.universes = grid
         return lattice, extent
+
+    def _outerUniverse(self):
+        """What lies outside the assembly lattice: void, or the ``outerFill`` block's mixture."""
+        if not self.options.outerFill:
+            return self._void
+        block = next(
+            (b for b in self.core.iterBlocks() if b.getType() == self.options.outerFill), None
+        )
+        if block is None:
+            raise ValueError(
+                f"openmcOuterFill: no block of type {self.options.outerFill} in the core"
+            )
+        mat = self.materials.make(
+            f"outside the assemblies ({block.getType()})",
+            block.getNumberDensities(),
+            block.getAverageTempInC(),
+        )
+        return openmc.Universe(name="outer fill", cells=[openmc.Cell(name="outer fill", fill=mat)])
 
     def _hexLattice(self, positions):
         rings = max(self.grid.getRingPos(ij)[0] for places in positions.values() for ij in places)
@@ -205,7 +234,7 @@ class CoreModelBuilder:
         lattice.orientation = blockModels.hexLatticeOrientationOf(self.grid)
         lattice.center = (float(x0), float(y0))
         lattice.pitch = (float(self.grid.pitch),)
-        lattice.universes = [[self._void] * max(1, 6 * (r - 1)) for r in range(rings, 0, -1)]
+        lattice.universes = [[self._empty] * max(1, 6 * (r - 1)) for r in range(rings, 0, -1)]
         return lattice
 
     def _boundingRegion(self, extent, cut):
@@ -332,6 +361,10 @@ def makeSettings(
         mesh.dimension = (8, 8, 8 if z1 - z0 > 2.0 else 1)
         s.entropy_mesh = mesh
     s.output = {"tallies": False}
+    # Instance offsets for every material cell are only needed for cell-instance results we never
+    # ask for (distribcell tallies add their own cells). With explicit particles they are fatal:
+    # each particle layer cell repeats in every compact of every block.
+    s.material_cell_offsets = False
     return s
 
 

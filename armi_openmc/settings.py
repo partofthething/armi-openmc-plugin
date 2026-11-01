@@ -31,6 +31,8 @@ CONF_RADIAL_BOUNDARY = "openmcRadialBoundary"
 CONF_TOP_BOUNDARY = "openmcTopBoundary"
 CONF_BOTTOM_BOUNDARY = "openmcBottomBoundary"
 CONF_AXIAL_SLICE = "openmcAxialSlice"
+CONF_CORE_RADIUS = "openmcCoreRadius"
+CONF_OUTER_FILL = "openmcOuterFill"
 CONF_TEMPERATURE_METHOD = "openmcTemperatureMethod"
 CONF_TEMPERATURE_TOLERANCE = "openmcTemperatureTolerance"
 CONF_THERMAL_SCATTERING = "openmcThermalScattering"
@@ -38,6 +40,10 @@ CONF_GROUP_STRUCTURE = "openmcGroupStructure"
 CONF_PIN_POWERS = "openmcPinPowers"
 CONF_XS_COLORSET = "openmcXSColorset"
 CONF_XS_TRACE_DENSITY = "openmcXSTraceDensity"
+CONF_PARTICLE_MODEL = "openmcParticleModel"
+CONF_PARTICLE_SEGMENT = "openmcParticleSegmentLength"
+CONF_PARTICLE_SEED = "openmcParticleSeed"
+CONF_PARTICLE_MESH_PITCH = "openmcParticleMeshPitch"
 CONF_RUN_DIR = "openmcRunDir"
 CONF_PLOT = "openmcPlotGeometry"
 
@@ -177,6 +183,24 @@ def defineSettings():
             ),
         ),
         setting.Setting(
+            CONF_CORE_RADIUS,
+            default=0.0,
+            label="Core radius (cm)",
+            description=(
+                "Radius of the cylinder that bounds a hexagonal core model. Zero fits it just "
+                "around the outermost assemblies."
+            ),
+        ),
+        setting.Setting(
+            CONF_OUTER_FILL,
+            default="",
+            label="Fill outside the assemblies",
+            description=(
+                "Block type whose homogenized composition fills the space between the assembly "
+                "lattice and the core boundary, e.g. a permanent side reflector. Blank: void."
+            ),
+        ),
+        setting.Setting(
             CONF_TEMPERATURE_METHOD,
             default="interpolation",
             label="Temperature treatment",
@@ -238,6 +262,42 @@ def defineSettings():
             ),
         ),
         setting.Setting(
+            CONF_PARTICLE_MODEL,
+            default="explicit",
+            label="Particle fuel",
+            description=(
+                "explicit packs every TRISO-like particle (from the particles section of the "
+                "blueprints) randomly in its host on a Cartesian mesh; homogenized smears matrix "
+                "and particles together. Only used for heterogeneous blocks."
+            ),
+            options=["explicit", "homogenized"],
+            enforcedOptions=True,
+        ),
+        setting.Setting(
+            CONF_PARTICLE_SEGMENT,
+            default=5.0,
+            label="Particle packing segment (cm)",
+            description=(
+                "Hosts are packed in segments of about this length, stacked up the block: like "
+                "compacts stacked in a fuel hole, and much faster to pack than a whole block."
+            ),
+        ),
+        setting.Setting(
+            CONF_PARTICLE_SEED,
+            default=1,
+            label="Particle packing seed",
+            description="Random seed of the particle packing.",
+        ),
+        setting.Setting(
+            CONF_PARTICLE_MESH_PITCH,
+            default=0.0,
+            label="Particle mesh pitch (cm)",
+            description=(
+                "Pitch of the Cartesian mesh the particles are sorted onto for fast tracking. "
+                "Zero picks one with a few particles per mesh element."
+            ),
+        ),
+        setting.Setting(
             CONF_RUN_DIR,
             default="openmc-runs",
             label="Run directory",
@@ -260,6 +320,7 @@ def defineSettingEditors(cs):
         "lattice physics code that makes ISOTXS cross sections (xsKernel: OpenMC)."
     )
     common = {"group": group}
+    particleOnly = {"showWhen": {"setting": CONF_PARTICLE_MODEL, "equals": "explicit"}}
     editors = {
         CONF_RUNNER: {**common, "order": 1, "groupHint": hint},
         CONF_EXECUTABLE: {
@@ -293,6 +354,8 @@ def defineSettingEditors(cs):
         CONF_TOP_BOUNDARY: {**common, "order": 32},
         CONF_BOTTOM_BOUNDARY: {**common, "order": 33},
         CONF_AXIAL_SLICE: {**common, "order": 34},
+        CONF_CORE_RADIUS: {**common, "order": 35},
+        CONF_OUTER_FILL: {**common, "order": 36},
         CONF_TEMPERATURE_METHOD: {**common, "order": 40},
         CONF_TEMPERATURE_TOLERANCE: {**common, "order": 41},
         CONF_THERMAL_SCATTERING: {**common, "order": 42},
@@ -300,6 +363,10 @@ def defineSettingEditors(cs):
         CONF_PIN_POWERS: {**common, "order": 51},
         CONF_XS_COLORSET: {**common, "order": 60},
         CONF_XS_TRACE_DENSITY: {**common, "order": 61},
+        CONF_PARTICLE_MODEL: {**common, "order": 25},
+        CONF_PARTICLE_SEGMENT: {**common, "order": 26, **particleOnly},
+        CONF_PARTICLE_SEED: {**common, "order": 27, **particleOnly},
+        CONF_PARTICLE_MESH_PITCH: {**common, "order": 28, **particleOnly},
         CONF_RUN_DIR: {**common, "order": 70, "widget": "path", "pathKind": "dir"},
         CONF_PLOT: {**common, "order": 71},
     }

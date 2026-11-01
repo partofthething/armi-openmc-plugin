@@ -113,6 +113,7 @@ class GenerateXS(EntryPoint):
 
         o = init(cs=self.cs)
         xsGroups = o.getInterface("xsGroups")
+        xsGroups.interactBOL()  # sets the cross section settings' defaults
         xsGroups.createRepresentativeBlocks()
         blocks = list(xsGroups.representativeBlocks.values())
         if self.args.xs_ids:

@@ -89,6 +89,11 @@ class Outline:
                 return False
         return True
 
+    def overlaps(self, other, tol=1e-6):
+        """True if the two outlines' circumscribed circles intersect (conservative for polygons)."""
+        distance = math.hypot(other.x - self.x, other.y - self.y)
+        return distance < self.circumscribedRadius + other.circumscribedRadius - tol
+
     def same(self, other, tol=1e-6):
         return self.contains(other, tol) and other.contains(self, tol)
 

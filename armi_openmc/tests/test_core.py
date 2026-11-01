@@ -57,3 +57,16 @@ def test_thirdCoreHexUnfolds(options):
     copies = {b.parent.spatialLocator.getRingPos(): n for b, n in model.copies.items()}
     assert copies[(1, 1)] == 1
     assert all(n == 3 for (ring, _), n in copies.items() if ring > 1)
+
+
+@needsData
+def test_emptyPositionsHoldTheOuterFill(fftf, options):
+    """Lattice positions without an assembly are what lies outside the assemblies, not void."""
+    options.blockModel = "homogenized"
+    options.outerFill = "Outer Radial Shield"
+    model = CoreModelBuilder(fftf.core, options).build()
+    root = next(iter(model.model.geometry.root_universe.cells.values()))
+    universes = [u for ring in root.fill.universes for u in ring]
+    assert not any(u.name == "void" for u in universes)
+    assert any(u.name == "outer fill" for u in universes)
+    assert root.fill.outer.name == "outer fill"

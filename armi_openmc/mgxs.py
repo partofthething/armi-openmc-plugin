@@ -133,7 +133,7 @@ class XSModelBuilder:
         expansion = {n: e for n, e in expansion.items() if e}
         trace = {n: opts.xsTraceDensity for n in expansion}
         materials = MaterialFactory(self.mapper, opts.thermalScattering, traceNuclides=trace)
-        builder = blockModels.BlockBuilder(materials, self.hexOrientation)
+        builder = blockModels.BlockBuilder(materials, self.hexOrientation, options=opts)
         heterogeneous = opts.blockModel == "heterogeneous"
         target = builder.build(block, heterogeneous)
 
@@ -159,8 +159,10 @@ class XSModelBuilder:
             fissionable = bool(target.fissionableCells)
             notes.append("infinite lattice")
 
-        bottom = openmc.ZPlane(-0.5, boundary_type="reflective")
-        top = openmc.ZPlane(0.5, boundary_type="reflective")
+        # The block's own height, reflected: explicit particles are packed over it.
+        height = block.getHeight() or 1.0
+        bottom = openmc.ZPlane(0.0, boundary_type="reflective")
+        top = openmc.ZPlane(height, boundary_type="reflective")
         for cell in root:
             cell.region = (
                 (cell.region & +bottom & -top) if cell.region is not None else (+bottom & -top)
@@ -170,7 +172,7 @@ class XSModelBuilder:
         mats.cross_sections = opts.crossSectionsPath
 
         x0, y0, x1, y1 = bounds
-        box = (x0, y0, -0.5, x1, y1, 0.5)
+        box = (x0, y0, 0.0, x1, y1, height)
         if fissionable:
             settings = makeSettings(opts, box)
         else:

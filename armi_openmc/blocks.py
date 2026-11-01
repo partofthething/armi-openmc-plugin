@@ -30,10 +30,12 @@ from dataclasses import dataclass, field
 import openmc
 import openmc.data
 from armi import runLog
+from armi.nucDirectory import nuclideBases
 from armi.reactor import grids
 from armi.reactor.blocks import HexBlock
 from armi.reactor.components import DerivedShape
 
+from armi_openmc import particles as particleFill
 from armi_openmc import shapes
 from armi_openmc.materials import MaterialFactory, mixNumberDensities
 
@@ -134,12 +136,27 @@ class BlockBuilder:
         OpenMC orientation of hexagonal blocks in the lattice that holds them ('x' = flats up).
     """
 
-    def __init__(self, materials: MaterialFactory, hexOrientation="x"):
+    def __init__(self, materials: MaterialFactory, hexOrientation="x", options=None):
         self.materials = materials
         self.hexOrientation = hexOrientation
         self.surfaces = SurfaceCache()
+        self.particleModel = getattr(options, "particleModel", "homogenized")
+        self.particles = (
+            particleFill.ParticleFiller(materials, options) if options is not None else None
+        )
+        self._zOrigin = 0.0
+        self._inclusions = []
 
-    def build(self, b, heterogeneous=True) -> BlockModel:
+    def build(self, b, heterogeneous=True, zOrigin=0.0) -> BlockModel:
+        """
+        The universe of block ``b``.
+
+        Parameters
+        ----------
+        zOrigin : float
+            Elevation of the block's bottom in the model, where explicit particles start.
+        """
+        self._zOrigin = zOrigin
         if heterogeneous:
             try:
                 return self._heterogeneous(b)
@@ -184,10 +201,7 @@ class BlockBuilder:
                     if region
                     else self.surfaces.outside(inner)
                 )
-            mat = self._material(b, c)
-            cells.append(openmc.Cell(name=f"{b.getName()} {c.name}", fill=mat, region=region))
-            if _isFissionable(mat):
-                fissionable.append(cells[-1])
+            cells.append(self._componentCell(b, c, region, fissionable))
             if k > 0:
                 prevOuter = layers[k - 1][1]
                 if inner is not None and not inner.same(prevOuter):
@@ -216,9 +230,33 @@ class BlockBuilder:
                 return self._finish(b, cells, fissionable)
         interiorRegion = self.surfaces.inside(interior) if interior is not None else None
 
+        # Off-center components (a control channel beside the pins) are carved out of the interior.
+        inclusionOutlines = []
+        for c in self._inclusions:
+            x, y, _ = c.spatialLocator.getLocalCoordinates()
+            outer, inner = shapes.outlines(c, orientation, float(x), float(y))
+            if interior is not None and not interior.contains(outer):
+                raise Unrepresentable(f"{c.name} reaches outside the innermost shell")
+            inclusionOutlines.append(outer)
+            carve = self.surfaces.outside(outer)
+            interiorRegion = interiorRegion & carve if interiorRegion is not None else carve
+            region = self.surfaces.inside(outer)
+            if inner is not None:
+                region &= self.surfaces.outside(inner)
+                cells.append(
+                    openmc.Cell(
+                        name=f"{b.getName()} {c.name} center",
+                        fill=bgMaterial,
+                        region=self.surfaces.inside(inner),
+                    )
+                )
+            cells.append(self._componentCell(b, c, region, fissionable))
+
         model = BlockModel(b, None, True)
         if pinsAt:
-            lattice = self._pinLattice(b, pinsAt, bgMaterial, interior, fissionable, model)
+            lattice = self._pinLattice(
+                b, pinsAt, bgMaterial, interior, fissionable, model, inclusionOutlines
+            )
             cells.append(
                 openmc.Cell(name=f"{b.getName()} pins", fill=lattice, region=interiorRegion)
             )
@@ -237,9 +275,11 @@ class BlockBuilder:
     # ----------------------------------------------------------------------------------------
     def _classify(self, b):
         """Split components into shells, pins (by grid position) and background."""
-        shells, background = [], []
+        shells, background, inclusions = [], [], []
         pinsAt = defaultdict(list)
         for c in b.iterComponents():
+            if particleFill.isParticleLayer(c):
+                continue  # drawn inside its host
             if isinstance(c, DerivedShape) or not shapes.isSolidShape(c):
                 background.append(c)
                 continue
@@ -253,6 +293,8 @@ class BlockBuilder:
                 for sub in loc:
                     i, j, _k = sub.getCompleteIndices()
                     pinsAt[(i, j)].append(c)
+            elif c.getDimension("mult") == 1 and _offCenter(c):
+                inclusions.append(c)
             elif c.getDimension("mult") == 1:
                 shells.append(c)
             else:
@@ -262,6 +304,7 @@ class BlockBuilder:
                     single=True,
                 )
                 background.append(c)
+        self._inclusions = inclusions
         return shells, pinsAt, background
 
     def _backgroundMaterial(self, b, background):
@@ -272,6 +315,44 @@ class BlockBuilder:
         ndens, temp = mixNumberDensities(parts)
         names = "+".join(c.name for c in background)
         return self.materials.make(f"{b.getName()} {names}", ndens, temp)
+
+    def _componentCell(self, b, c, region, fissionable):
+        """The cell of one component; a particle host is filled with them, or their mixture."""
+        layers = particleFill.particleLayers(c)
+        if not layers:
+            mat = self._material(b, c)
+            cell = openmc.Cell(name=f"{b.getName()} {c.name}", fill=mat, region=region)
+            if _isFissionable(mat):
+                fissionable.append(cell)
+            return cell
+        why = (
+            self.particles.whyNotExplicit(c)
+            if self.particles is not None
+            else "no particle options"
+        )
+        if self.particleModel == "explicit" and why is None:
+            cell = openmc.Cell(
+                name=f"{b.getName()} {c.name}", fill=self.particles.fill(b, c), region=region
+            )
+            cell.translation = (0.0, 0.0, self._zOrigin)
+            if any(_hasActinides(layer) for layer in layers):
+                fissionable.append(cell)
+            return cell
+        if self.particleModel == "explicit":
+            runLog.warning(f"OpenMC: smearing the particles in {c.name}: {why}", single=True)
+        if self.particles is not None:
+            mat = self.particles.homogenizedMaterial(b, c)
+        else:
+            mat = self.materials.make(
+                f"{b.getName()} {c.name} homogenized",
+                *mixNumberDensities(
+                    [(x.getNumberDensities(), x.getArea(), x.temperatureInC) for x in [c, *layers]]
+                ),
+            )
+        cell = openmc.Cell(name=f"{b.getName()} {c.name}", fill=mat, region=region)
+        if _isFissionable(mat):
+            fissionable.append(cell)
+        return cell
 
     def _material(self, b, c):
         return self.materials.make(
@@ -288,7 +369,7 @@ class BlockBuilder:
         return layers
 
     # ----------------------------------------------------------------------------------------
-    def _pinLattice(self, b, pinsAt, bgMaterial, interior, fissionable, model):
+    def _pinLattice(self, b, pinsAt, bgMaterial, interior, fissionable, model, inclusions=()):
         grid = b.spatialGrid
         bgCell = openmc.Cell(name=f"{b.getName()} pin background", fill=bgMaterial)
         bgUniverse = openmc.Universe(cells=[bgCell])
@@ -318,10 +399,11 @@ class BlockBuilder:
             uIndex = lattice.get_universe_index(idx)
             _setNested(universes, uIndex, pinUniverses[key][0])
             model.pinIndices[uIndex] = ij
-            if interior is not None:
-                placed = shapes.Outline(*_shifted(pinUniverses[key][1], x, y))
-                if not interior.contains(placed):
-                    raise Unrepresentable("its pin lattice reaches outside the innermost shell")
+            placed = shapes.Outline(*_shifted(pinUniverses[key][1], x, y))
+            if interior is not None and not interior.contains(placed):
+                raise Unrepresentable("its pin lattice reaches outside the innermost shell")
+            if any(placed.overlaps(other) for other in inclusions):
+                raise Unrepresentable(f"a pin at {ij} overlaps an off-center component")
         for _universe, outer in pinUniverses.values():
             if not cellOutline.contains(outer):
                 raise Unrepresentable(f"its pins ({outer.size}) are larger than the pin pitch")
@@ -339,10 +421,7 @@ class BlockBuilder:
             region = self.surfaces.inside(outer)
             if inner is not None:
                 region &= self.surfaces.outside(inner)
-            mat = self._material(b, c)
-            cells.append(openmc.Cell(name=f"{b.getName()} {c.name}", fill=mat, region=region))
-            if _isFissionable(mat):
-                fissionable.append(cells[-1])
+            cells.append(self._componentCell(b, c, region, fissionable))
             if k == 0 and inner is not None:
                 cells.append(
                     openmc.Cell(
@@ -394,6 +473,15 @@ class BlockBuilder:
         return lattice
 
 
+def _offCenter(c):
+    """True for a component whose location puts it off the center of its block."""
+    loc = c.spatialLocator
+    if not isinstance(loc, grids.CoordinateLocation):
+        return False
+    x, y, _ = loc.getLocalCoordinates()
+    return abs(float(x)) > 1e-9 or abs(float(y)) > 1e-9
+
+
 def _shifted(outline, x, y):
     return (outline.kind, outline.size, x, y, outline.hexOrientation)
 
@@ -403,6 +491,15 @@ def _setNested(nested, index, value):
     for i in index[:-1]:
         target = target[i]
     target[index[-1]] = value
+
+
+def _hasActinides(component):
+    """True for an ARMI component holding any actinide."""
+    for name, density in component.getNumberDensities().items():
+        base = nuclideBases.byName.get(name)
+        if density > 0.0 and base is not None and base.z >= 90:
+            return True
+    return False
 
 
 def _isFissionable(mat):

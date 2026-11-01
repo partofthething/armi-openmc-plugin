@@ -7,6 +7,7 @@ way inside and out, and runs as the calling user so the outputs belong to them.
 """
 
 import glob
+import hashlib
 import os
 import shutil
 import subprocess
@@ -63,6 +64,8 @@ def command(options: OpenMCOptions, workdir, args=()):
         "docker",
         "run",
         "--rm",
+        "--name",
+        containerName(workdir),
         "--user",
         f"{os.getuid()}:{os.getgid()}",
         "-e",
@@ -79,6 +82,12 @@ def command(options: OpenMCOptions, workdir, args=()):
         *openmcArgs,
     ]
     return cmd, runner
+
+
+def containerName(workdir):
+    """A name for the container that runs ``workdir``, so an interrupted run can stop it."""
+    digest = hashlib.sha1(os.path.abspath(workdir).encode()).hexdigest()[:10]
+    return f"armi-openmc-{digest}-{os.getpid()}"
 
 
 def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=True):
@@ -108,11 +117,19 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
             text=True,
             bufsize=1,
         )
-        for line in proc.stdout:
-            log.write(line)
-            if echo and not plotting:
-                print(f"[openmc] {line}", end="", flush=True)
-        proc.wait()
+        try:
+            for line in proc.stdout:
+                log.write(line)
+                if echo and not plotting:
+                    print(f"[openmc] {line}", end="", flush=True)
+            proc.wait()
+        except BaseException:
+            # An interrupted ARMI run must not leave the solver running on its own: a container
+            # outlives the docker client that started it.
+            if runner == "docker":
+                subprocess.run(["docker", "stop", containerName(workdir)], capture_output=True)
+            proc.kill()
+            raise
     if proc.returncode != 0:
         tail = Path(logPath).read_text().splitlines()[-30:]
         raise OpenMCRunError(

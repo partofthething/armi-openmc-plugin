@@ -142,8 +142,9 @@ class MaterialFactory:
         #: {ARMI name: density} added to every material that lacks the nuclide (XS generation).
         self.traceNuclides = traceNuclides or {}
         self.materials = []
+        self._shared = {}
 
-    def make(self, name, numberDensities, temperatureInC):
+    def make(self, name, numberDensities, temperatureInC, reuse=False):
         """
         A material for these ARMI number densities, or None for a void.
 
@@ -155,6 +156,10 @@ class MaterialFactory:
             ARMI nuclide name to atoms/barn-cm.
         temperatureInC : float
             Material temperature in Celsius.
+        reuse : bool
+            Return the material already made for identical densities and temperature, if any.
+            For regions that are deliberately shared (particle layers of identical compacts),
+            never for ones that may later need to change on their own.
         """
         densities = {k: v for k, v in numberDensities.items() if v > 0.0}
         for nuc, trace in self.traceNuclides.items():
@@ -162,6 +167,14 @@ class MaterialFactory:
         omc = self.mapper.toOpenMC(densities)
         if not omc or sum(omc.values()) <= 0.0:
             return None
+        key = None
+        if reuse:
+            key = (
+                tuple(sorted((n, round(d, 12)) for n, d in omc.items())),
+                round(temperatureInC, 3),
+            )
+            if key in self._shared:
+                return self._shared[key]
         mat = openmc.Material(name=name, temperature=temperatureInC + KELVIN_OFFSET)
         for nuc, density in sorted(omc.items()):
             mat.add_nuclide(nuc, density, "ao")
@@ -170,6 +183,8 @@ class MaterialFactory:
             for table in _thermalTables(_elementFractions(omc), self.mapper.thermalTables):
                 mat.add_s_alpha_beta(table)
         self.materials.append(mat)
+        if key is not None:
+            self._shared[key] = mat
         return mat
 
 

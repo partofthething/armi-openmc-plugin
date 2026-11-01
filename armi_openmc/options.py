@@ -28,6 +28,8 @@ class OpenMCOptions:
     topBoundary: str = "vacuum"
     bottomBoundary: str = "vacuum"
     axialSlice: float | None = None
+    coreRadius: float = 0.0
+    outerFill: str = ""
 
     temperatureMethod: str = "interpolation"
     temperatureTolerance: float = 50.0
@@ -35,6 +37,11 @@ class OpenMCOptions:
 
     groupStructure: str = "ANL33"
     pinPowers: bool = False
+
+    particleModel: str = "explicit"
+    particleSegmentLength: float = 5.0
+    particleSeed: int = 1
+    particleMeshPitch: float = 0.0
 
     xsColorset: bool = True
     xsTraceDensity: float = 1e-12
@@ -59,11 +66,17 @@ class OpenMCOptions:
         "topBoundary": S.CONF_TOP_BOUNDARY,
         "bottomBoundary": S.CONF_BOTTOM_BOUNDARY,
         "axialSlice": S.CONF_AXIAL_SLICE,
+        "coreRadius": S.CONF_CORE_RADIUS,
+        "outerFill": S.CONF_OUTER_FILL,
         "temperatureMethod": S.CONF_TEMPERATURE_METHOD,
         "temperatureTolerance": S.CONF_TEMPERATURE_TOLERANCE,
         "thermalScattering": S.CONF_THERMAL_SCATTERING,
         "groupStructure": S.CONF_GROUP_STRUCTURE,
         "pinPowers": S.CONF_PIN_POWERS,
+        "particleModel": S.CONF_PARTICLE_MODEL,
+        "particleSegmentLength": S.CONF_PARTICLE_SEGMENT,
+        "particleSeed": S.CONF_PARTICLE_SEED,
+        "particleMeshPitch": S.CONF_PARTICLE_MESH_PITCH,
         "xsColorset": S.CONF_XS_COLORSET,
         "xsTraceDensity": S.CONF_XS_TRACE_DENSITY,
         "runDir": S.CONF_RUN_DIR,
