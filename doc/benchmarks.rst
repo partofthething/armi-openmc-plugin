@@ -239,10 +239,64 @@ These are not identical calculations:
    scattering. Both are lower-triangular with the same structure; the in-group terms agree to
    about 1 %, and the down-scatter band differs by a few percent.
 
-The one clear outlier is iron's transport cross section, 13–20 % higher here. MC2-3 weights
-transport by current, while the plugin weights it by flux (total minus the P1 moment). The two
-differ most in iron's deep resonance windows, where the flux peaks. Totals and scattering, which
-are flux-weighted in both codes, agree to 1.6 %.
+Iron transport
+~~~~~~~~~~~~~~
+
+The one clear outlier is iron's transport cross section: one group 17 % higher than MC2-3's, and
+up to 75 % higher in single groups, while its total and scattering agree to about 1.6 %. The
+two codes define transport differently:
+
+* MC2-3 writes a *current-weighted* (consistent-P1) transport cross section.
+* The plugin writes a *flux-weighted* one, the total minus the P1 scattering moment.
+
+In a resonance window, where the mixture's total cross section dips, the flux peaks, and the
+current, which goes as the flux over the total, peaks harder. Weighting by current therefore
+pulls a nuclide's total down toward its windows, and iron is the nuclide with the deepest
+windows here.
+
+``doc/iron_transport_check.py`` puts a number on this. It takes Fe-56's pointwise ENDF/B-VIII.1
+total cross section in this mixture, assumes the narrow-resonance shapes (flux ∝ 1/(E Σt),
+current ∝ 1/(E Σt²)), and computes the flux-weighted minus current-weighted total in every group.
+That difference predicts the gap between the two libraries' transport cross sections:
+
+.. figure:: _static/xs-mc2v3-iron-transport.png
+   :width: 85%
+   :alt: Fe-56 transport cross section from OpenMC and MC2-3, with the predicted weighting gap
+
+   Fe-56 transport cross section from both codes (top). The observed difference (middle, solid)
+   follows the difference predicted from the weighting alone (middle, dashed), while the total
+   cross sections agree. The OpenMC flux (bottom) shows where it matters.
+
+.. list-table:: Fe-56 transport, OpenMC − MC2-3 (barns)
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - Group
+     - Predicted from weighting
+     - Observed
+   * - 24.8–40.9 keV (the 24 keV window)
+     - +3.75
+     - +3.35
+   * - 67–111 keV
+     - +0.74
+     - +0.56
+   * - 111–498 keV (three groups)
+     - +0.59 to +0.68
+     - +0.37 to +0.43
+   * - below 15 keV, above 1.4 MeV
+     - within ±0.1
+     - within ±0.1
+
+The prediction follows the observed difference group by group, slightly high because the
+narrow-resonance shapes overstate the windows. So the gap is a different *definition* of the
+transport cross section, not an error in either library.
+
+It still matters. A diffusion code builds its diffusion coefficients from the transport cross
+section. For iron- and sodium-rich fast cores the current-weighted definition is the better one
+for leakage, so the plugin's flux-weighted transport overstates the diffusion-theory
+cross section in exactly the energy range where fast reactors leak. Monte Carlo core runs are
+unaffected; only ISOTXS used by a diffusion solver is. A current-weighted option is on the
+:doc:`roadmap`.
 
 ISOTXS self-consistency
 -----------------------

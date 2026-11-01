@@ -358,9 +358,84 @@ def mc2v3ScatterMatrices():
     print(f"wrote {out}")
 
 
+def mc2v3IronTransport():
+    """Fe-56 transport: both codes, their difference next to the total's, and the flux."""
+    ref, omc, weight, upper, lower = _mc2v3Libraries()
+    keep = weight >= 1e-5
+    edges = np.append(upper[keep], lower[keep][-1])
+    micA, micB = ref["FE56AA"].micros, omc["FE56AA"].micros
+
+    def first(m):
+        return np.ravel(m[:, 0]) if np.ndim(m) == 2 else np.asarray(m)
+
+    trA, trB = first(micA.transport)[keep], first(micB.transport)[keep]
+    totA, totB = first(micA.total)[keep], first(micB.total)[keep]
+    lethargy = np.log(upper / lower)[keep]
+    perLethargy = weight[keep] / lethargy
+
+    fig, axes = plt.subplots(
+        3, 1, figsize=(7.4, 7.6), dpi=160, sharex=True, gridspec_kw={"height_ratios": [3, 2, 2]}
+    )
+    fig.patch.set_facecolor(SURFACE)
+    top, middle, bottom = axes
+    for (name, color), values in zip(SERIES.items(), (trA, trB), strict=True):
+        top.stairs(values, edges, color=color, lw=2, label=name, baseline=None)
+    top.set_yscale("log")
+    top.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+    top.yaxis.set_minor_formatter(FuncFormatter(_minorLabel))
+    top.set_ylabel("transport (b)", color=INK_2, fontsize=8)
+    oneA, oneB = float(weight[keep] @ trA), float(weight[keep] @ trB)
+    top.set_title(
+        f"Fe-56 transport cross section   1-group {100 * (oneB - oneA) / oneA:+.0f}%",
+        color=INK,
+        fontsize=10,
+        loc="left",
+    )
+    top.legend(frameon=False, fontsize=8, labelcolor=INK, loc="upper right")
+
+    trDiff = 100.0 * (trB - trA) / trA
+    totDiff = 100.0 * (totB - totA) / totA
+    middle.stairs(trDiff, edges, color=INK, lw=2, baseline=None, label="transport, observed")
+    cache = ROOT / "examples" / "mc2v3-fixture" / "iron-weighting.json"
+    if cache.exists():  # from doc/iron_transport_check.py
+        gap = json.loads(cache.read_text())["predictedTransportGapBarns"]
+        groups = np.flatnonzero(keep)
+        predicted = np.array([gap.get(str(g), np.nan) for g in groups]) / trA * 100.0
+        middle.stairs(
+            predicted,
+            edges,
+            color=INK_2,
+            lw=1.6,
+            ls="--",
+            baseline=None,
+            label="flux- minus current-weighted total (predicted)",
+        )
+    middle.stairs(totDiff, edges, color=MUTED, lw=1.5, baseline=None, label="total, observed")
+    middle.axhline(0.0, color="#c3c2b7", lw=1)
+    middle.set_ylabel("OpenMC − MC2-3 (% of MC2-3)", color=INK_2, fontsize=8)
+    middle.legend(frameon=False, fontsize=7.5, labelcolor=INK, loc="upper right")
+
+    bottom.stairs(perLethargy / perLethargy.max(), edges, color=INK_2, lw=1.5, baseline=None)
+    bottom.set_ylabel("flux per lethargy\n(OpenMC, peak = 1)", color=INK_2, fontsize=8)
+    bottom.set_xlabel("neutron energy (eV)", color=INK_2, fontsize=8)
+    for ax in axes:
+        _style(ax, fig)
+        ax.set_xscale("log")
+        ax.set_xlim(edges[-1], edges[0])
+        ax.grid(True, color=GRID, lw=0.6)
+        ax.set_axisbelow(True)
+        ax.tick_params(which="both", colors=MUTED, labelsize=8)
+    fig.tight_layout()
+    out = STATIC / "xs-mc2v3-iron-transport.png"
+    fig.savefig(out, bbox_inches="tight", facecolor=SURFACE)
+    print(f"wrote {out}")
+    return edges, trDiff, totDiff, perLethargy
+
+
 if __name__ == "__main__":
     STATIC.mkdir(parents=True, exist_ok=True)
     c5g7PinPower()
     fftfAssemblyPower()
     mc2v3CrossSections()
     mc2v3ScatterMatrices()
+    mc2v3IronTransport()

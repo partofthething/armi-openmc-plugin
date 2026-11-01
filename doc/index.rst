@@ -17,6 +17,12 @@ Cross sections (``xsKernel: OpenMC``)
    lattice or in a colorset with its driver. Tallies are reduced to microscopic multigroup cross
    sections and written as an ISOTXS library any ARMI flux solver can read.
 
+.. note::
+
+   This plugin, its documentation and its benchmark analyses were made with large language models
+   (Anthropic's Claude) under the direction of a human developer. Check any result that matters
+   to you against independent calculations, as you would with any code.
+
 .. figure:: _static/fftf-geometry-xy.png
    :width: 70%
    :alt: Mid-plane slice of the OpenMC model of the FFTF core

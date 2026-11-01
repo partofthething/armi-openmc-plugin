@@ -53,6 +53,10 @@ Also planned
 ------------
 
 * MPI execution on clusters, next to the threaded and container runners.
+* Current-weighted (consistent-P1) transport cross sections in XS mode, as MC2-3 writes them.
+  The flux-weighted ones the plugin writes now overstate iron's transport cross section by up to
+  tens of percent between 20 keV and 1 MeV (see :doc:`benchmarks`), which matters for diffusion
+  coefficients in fast cores.
 * Higher-order (P1+) scattering and gamma libraries (GAMISO/PMATRX) in XS mode, and better
   hexagonal colorsets.
 * Shapes beyond circles, hexagons and rectangles drawn exactly instead of smeared.
