@@ -1,0 +1,25 @@
+# FFTF isothermal critical with only fuel blocks pin-detailed (separates fuel and absorber heterogeneity).
+# OpenMC as the global flux solver. Full hexagonal core; fuel and absorber blocks are modeled
+# pin by pin (wire wraps smeared into the coolant), the rest as the homogenized blocks the
+# blueprints define. The benchmark is FFTF-LMFR-RESR-001 (Bess et al., INL/EXT-09-16524).
+settings:
+  comment: FFTF isothermal critical, fuel pins only
+  loadingFile: FFTF-blueprints.yaml
+  nCycles: 1
+  burnSteps: 0
+  power: 400000000.0
+  beta: 0.00318
+  detailedAxialExpansion: true
+  db: true
+  genReports: false
+  genXS: ""
+  neutronicsKernel: OpenMC
+  groupStructure: ANL33
+  openmcCrossSections: /mnt/storage/nuclear_data/openmc/endfb-viii.1-hdf5/cross_sections.xml
+  openmcParticles: 40000
+  openmcBatches: 200
+  openmcInactiveBatches: 50
+  openmcBlockModel: heterogeneous
+  openmcHeterogeneousBlockFlags: [fuel]
+  versions:
+    armi: uncontrolled

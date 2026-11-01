@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "armi-openmc"
+version = "0.1.0"
+description = "ARMI plugin that builds, runs and reads OpenMC Monte Carlo models of ARMI reactors"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "Nick Touran", email = "nick@partofthething.com" }]
+dependencies = [
+    "armi",
+    # The OpenMC Python API (model building, statepoint reading). PyPI has no wheels, so it is
+    # installed from the release tag. The solver itself can be a local binary or a container.
+    "openmc",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "ruff==0.17.3"]
+docs = ["sphinx>=8", "sphinx-book-theme>=1.1", "matplotlib"]
+
+[project.scripts]
+armi-openmc = "armi_openmc.__main__:main"
+
+[tool.uv.sources]
+armi = { git = "https://github.com/partofthething/armi", branch = "main" }
+openmc = { git = "https://github.com/openmc-dev/openmc", tag = "v0.15.3" }
+
+[tool.setuptools.packages.find]
+include = ["armi_openmc*"]
+
+[tool.setuptools.package-data]
+armi_openmc = ["resources/*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["armi_openmc/tests"]
+markers = ["openmc: runs the OpenMC solver (slow; needs a binary or docker and nuclear data)"]

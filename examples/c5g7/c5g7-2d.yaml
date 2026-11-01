@@ -1,0 +1,27 @@
+# C5G7 2D: a slice through the fuel with reflective top and bottom.
+#
+# Quarter core with reflective symmetry planes (kept as a quarter by the plugin), a reflective
+# bottom (the benchmark's axial midplane) and vacuum top and radial boundaries. Every assembly
+# is pin-detailed.
+settings:
+  comment: C5G7 2D (a slice through the fuel), OpenMC continuous energy
+  loadingFile: c5g7-blueprints.yaml
+  nCycles: 1
+  burnSteps: 0
+  power: 1000000000.0
+  db: true
+  genReports: false
+  genXS: ""
+  neutronicsKernel: OpenMC
+  groupStructure: CASMO4
+  openmcCrossSections: /mnt/storage/nuclear_data/openmc/endfb-viii.1-hdf5/cross_sections.xml
+  openmcParticles: 50000
+  openmcBatches: 250
+  openmcInactiveBatches: 50
+  openmcBlockModel: heterogeneous
+  openmcAxialSlice: 30.0
+  openmcRadialBoundary: vacuum
+  openmcPinPowers: true
+  openmcPlotGeometry: true
+  versions:
+    armi: uncontrolled
