@@ -33,6 +33,10 @@ It does two jobs:
   A block that cannot be laid out (overlapping layers, pins wider than the pitch) is homogenized
   with a warning saying why. Volumes match the ARMI component areas, so number densities carry
   over unchanged.
+* **Particle fuel (TRISO):** blocks whose components hold particles (the fork's `particles:`
+  blueprint section) get every particle packed at random in its compact and tracked on a
+  Cartesian mesh (`openmcParticleModel: explicit`), or matrix and particles smeared
+  (`homogenized`). Off-center channels (`origin`) are carved out of the pin lattice.
 * **2D:** `openmcAxialSlice: <z>` models the blocks at one elevation, with reflective top and
   bottom.
 * **Materials:** ARMI nuclides map to the library's (natural elements expand over the isotopes it

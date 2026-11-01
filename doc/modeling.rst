@@ -49,6 +49,39 @@ S(α,β) tables are added from what a material is made of: water (H with O), hea
 graphite, beryllium, BeO and zirconium hydride. Homogenized LWR blocks therefore get water
 thermal scattering too.
 
+Particle fuel (TRISO)
+---------------------
+
+ARMI describes particle fuel with a ``particles:`` blueprint section and a host component that
+holds the particles at a packing fraction (see the ARMI input documentation, *Particle fuel*).
+Each particle layer is a ``ParticleLayer`` component of the block; the host is the matrix.
+``openmcParticleModel`` decides how OpenMC sees them:
+
+``explicit`` (the default)
+   Every particle is drawn. Particle centers are randomly packed in the host with
+   ``openmc.model.pack_spheres`` at ARMI's particle count, the particles are sorted onto a
+   Cartesian mesh with ``openmc.model.create_triso_lattice`` (a neutron then checks only the few
+   particles in its own mesh element), and the matrix fills the rest.
+
+   A whole block height holds 10\ :sup:`5` and more particles per compact, too many to pack
+   at once, so the host is packed in segments of about ``openmcParticleSegmentLength``
+   (5 cm by default) that are stacked up the block, each a closed packing domain like the
+   compacts stacked in a real fuel hole. Packings are cached under ``openmcRunDir`` by their
+   parameters; ``openmcParticleSeed`` changes the packing and ``openmcParticleMeshPitch`` the
+   mesh (by default about eight particle centers per mesh element).
+
+   Hosts of identical dimensions, particle count and composition share one packed universe, so
+   a core of fresh fuel blocks packs each kind of compact once: the MHTGR-350 core, 660 fuel
+   blocks with 210 compacts each, packs one fuel and one burnable-poison compact and runs in
+   under 500 MB.
+
+``homogenized``
+   Matrix and particles are smeared into one material by volume, compact by compact.
+
+Explicit packing needs a solid circular host (a compact); other hosts are smeared with a
+warning. Off-center components (``origin`` in the blueprints, such as a reserve shutdown
+channel beside the pin lattice) are carved out of the pin region, and must not overlap a pin.
+
 Cores
 -----
 
@@ -66,6 +99,10 @@ Symmetry:
   through the origin (``openmcSymmetry: native``);
 * any other partial core (third-core hex, periodic or eighth Cartesian) is unfolded to full core,
   placing each assembly's universe again at its symmetric positions.
+
+A hexagonal core is bounded by a cylinder just around its assemblies, or of
+``openmcCoreRadius``; ``openmcOuterFill`` names a block type whose composition fills the space
+between the assemblies and that cylinder (a permanent side reflector, for instance).
 
 Boundaries are vacuum by default; ``openmcTopBoundary``, ``openmcBottomBoundary`` and
 ``openmcRadialBoundary`` change them (C5G7 uses a reflective bottom). ``openmcAxialSlice``

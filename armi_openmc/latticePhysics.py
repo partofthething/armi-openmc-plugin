@@ -30,6 +30,29 @@ def describeInterfaces(cs):
     return None
 
 
+#: Representative-block methods that smear each nuclide evenly over the components holding it.
+#: Fine for a homogenized lattice code; wrong for a heterogeneous model, where a poison in the
+#: burnable-absorber grains ends up spread through the moderator.
+SMEARING_REPRESENTATIONS = ("Average", "FluxWeightedAverage")
+
+
+def warnIfSmeared(cs, options):
+    """Warn when heterogeneous blocks are represented by a nuclide-smearing average block."""
+    if cs is None or options.blockModel != "heterogeneous":
+        return
+    from armi.physics.neutronics.settings import CONF_XS_BLOCK_REPRESENTATION
+
+    method = cs[CONF_XS_BLOCK_REPRESENTATION] if CONF_XS_BLOCK_REPRESENTATION in cs else None
+    if method in SMEARING_REPRESENTATIONS:
+        runLog.warning(
+            f"OpenMC XS: xsBlockRepresentation {method} spreads each nuclide evenly over every "
+            "component of the representative block that holds it, which undoes the "
+            "heterogeneous model (a poison in its grains ends up in the graphite). Use Median, "
+            "which keeps a real block, for heterogeneous OpenMC cross sections.",
+            single=True,
+        )
+
+
 def generateLibrary(r, cs, blocks, options: OpenMCOptions = None, suffix="", xsSettings=None):
     """
     Run OpenMC on representative blocks and return an ISOTXS library for them.
@@ -44,6 +67,7 @@ def generateLibrary(r, cs, blocks, options: OpenMCOptions = None, suffix="", xsS
         Representative blocks, one per XS ID.
     """
     options = options or OpenMCOptions.fromSettings(cs)
+    warnIfSmeared(cs, options)
     xsSettings = xsSettings if xsSettings is not None else cs[CONF_CROSS_SECTION]
     byID = {b.getMicroSuffix(): b for b in blocks}
     grid = r.core.spatialGrid if r is not None else None

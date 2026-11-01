@@ -16,6 +16,10 @@ Summary
      - armi-openmc
      - Reference
      - Difference
+   * - MHTGR-350 fresh core, explicit TRISO, k-eff
+     - 1.12096 ± 0.00045
+     - no continuous-energy reference
+     - double heterogeneity +3,901 pcm (element)
    * - FFTF isothermal critical, k-eff
      - 0.99576 ± 0.00032
      - 0.9993 ± 0.0021 (benchmark)
@@ -298,6 +302,74 @@ for leakage, so the plugin's flux-weighted transport overstates the diffusion-th
 cross section in exactly the energy range where fast reactors leak. Monte Carlo core runs are
 unaffected; only ISOTXS used by a diffusion solver is. A current-weighted option is on the
 :doc:`roadmap`.
+
+MHTGR-350 with explicit TRISO
+-----------------------------
+
+The OECD/NEA MHTGR-350 benchmark core (NEA/NSC/R(2017)4), from the inputs in
+`partofthething/mhtgr350-armi <https://github.com/partofthething/mhtgr350-armi>`_: ARMI blueprints
+generated from the specification's tables, with every TRISO particle and every burnable poison
+grain modeled. In ARMI each particle layer is a component of its block (the fork's
+``particles:`` blueprint section); the plugin packs them at random in each compact.
+
+.. list-table::
+   :widths: 50 50
+
+   * - .. figure:: _static/mhtgr-block.png
+          :width: 100%
+          :alt: The MHTGR-350 standard fuel element in OpenMC
+
+          The standard element: 210 fuel compacts, 102 + 6 coolant holes and six burnable
+          poison compacts on a 1.8796 cm pitch, 36 cm across flats.
+     - .. figure:: _static/mhtgr-compact.png
+          :width: 100%
+          :alt: One fuel compact with its TRISO particles
+
+          One 1.245 cm compact: 6,685 particles per 5 cm, packed at random at a packing
+          fraction of 0.35, each with kernel, buffer, IPyC, SiC and OPyC.
+
+The benchmark's own exercises use cross sections of depleted, equilibrium-cycle compositions
+that it publishes only as cross sections, so the model is the configuration the specification
+does define: fresh fuel, 20 °C isothermal, all rods withdrawn.
+
+.. list-table:: MHTGR-350, fresh, 20 °C, all rods withdrawn (ENDF/B-VIII.1)
+   :header-rows: 1
+   :widths: 52 24 24
+
+   * - Model
+     - k
+     - From its ISOTXS
+   * - **Full core**, burnable poison as specified (40,000 × 150)
+     - **k-eff 1.12096 ± 0.00045**
+     -
+   * - Full core, burnable poison grains without boron
+     - k-eff 1.42713 ± 0.00040
+     -
+   * - Standard element, explicit TRISO (20,000 × 150)
+     - k-inf 1.17293 ± 0.00064
+     - 1.17299
+   * - Standard element, compacts homogenized
+     - k-inf 1.12161 ± 0.00063
+     - 1.12159
+   * - Standard element, explicit TRISO, no poison boron
+     - k-inf 1.4885 ± 0.0006
+     -
+
+* **Double heterogeneity** -- resolving the particles rather than smearing them -- is worth
+  +3,901 pcm in the element, as expected of HTGR fuel, where the kernels self-shield strongly.
+* **The cross sections close**: the k-infinity of the homogenized medium rebuilt from each
+  ISOTXS matches OpenMC's within statistics, explicit particles included.
+* **The burnable poison** holds down 18,100 pcm in the element and 19,100 pcm in the core;
+  leakage costs the core 2,900--3,950 pcm against the element's infinite lattice.
+* **Representative blocks**: the element runs use ``xsBlockRepresentation: Median``. ARMI's
+  default ``Average`` representative block spreads each nuclide over every component holding
+  it, which suits a homogenized lattice code but here moved the poison out of its grains into
+  the graphite (k-infinity 0.895 instead of 1.173). The plugin now warns about it. The ISOTXS
+  self-consistency check cannot catch such an error: it checks a library against its own block.
+
+The full core has 163 columns and 1,956 blocks, 660 of them with explicit particles; one fuel and
+one poison compact are packed and shared, so the model has about 150,000 cells and runs in under
+0.5 GB, at about 4,400 histories per second on 12 threads (25 minutes). The element takes 15.
 
 ISOTXS self-consistency
 -----------------------

@@ -60,5 +60,7 @@ Also planned
 * Higher-order (P1+) scattering and gamma libraries (GAMISO/PMATRX) in XS mode, and better
   hexagonal colorsets.
 * Shapes beyond circles, hexagons and rectangles drawn exactly instead of smeared.
+* Pebble beds: explicit particles in spherical pebbles, and pebbles packed in a vessel, with the
+  same packing machinery as compacts.
 * Reactivity coefficient and control rod worth calculations driven from ARMI.
 * A standing set of verification problems rerun on every change, in CI.
