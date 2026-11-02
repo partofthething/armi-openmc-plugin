@@ -78,8 +78,13 @@ Each particle layer is a ``ParticleLayer`` component of the block; the host is t
 ``homogenized``
    Matrix and particles are smeared into one material by volume, compact by compact.
 
-Explicit packing needs a solid circular host (a compact); other hosts are smeared with a
-warning. Off-center components (``origin`` in the blueprints, such as a reserve shutdown
+Explicit packing needs a solid circular host (a compact) or a solid sphere (a pebble's fuel
+zone, packed whole); other hosts are smeared with a warning.
+
+**Pebbles.** A ``SphericalBlock`` (a block whose largest component is a ``Sphere``) is a pebble's
+unit cell: its spheres are drawn as concentric cells, and in XS mode the outer sphere gets a
+white boundary, the usual closure of a pebble cell. Spherical cells have no place in a core
+lattice and are refused there. Off-center components (``origin`` in the blueprints, such as a reserve shutdown
 channel beside the pin lattice) are carved out of the pin region, and must not overlap a pin.
 
 Cores

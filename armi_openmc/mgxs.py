@@ -13,6 +13,9 @@ blocks:
   with a white boundary. Hexagonal colorsets do not tile, so this is an approximation of an
   infinite driver region around one target.
 
+A spherical block (a pebble's unit cell) is its outer sphere with a white boundary, the classic
+closure of a pebble cell.
+
 A block with no fissionable material and no driver is run as a fixed-source problem with a
 fission spectrum source, which gives it a slowing-down spectrum.
 
@@ -138,9 +141,27 @@ class XSModelBuilder:
         target = builder.build(block, heterogeneous)
 
         isHex = isinstance(block, HexBlock)
+        spherical = blockModels.isSpherical(block)
         outline = blockModels.blockOutline(block, self.hexOrientation)
         notes = []
-        if driver is not None:
+        if spherical:
+            if driver is not None:
+                raise ValueError(f"A spherical cell ({block}) cannot be run in a colorset.")
+            # The spheres' own cells are the root, the outermost sphere white. (A white boundary
+            # on a cell filled with the block universe crashes OpenMC 0.15.3 when a particle is
+            # sent back in.) The whole model is the target: the tallies need no cell filter.
+            boundary = builder.surfaces.get(outline)
+            boundary.surface.boundary_type = "white"
+            root = list(target.universe.cells.values())
+            for cell in root:
+                if cell.region is None:  # a homogenized cell
+                    cell.region = boundary
+            targetCell = None
+            r = outline.circumscribedRadius
+            bounds = (-r, -r, r, r)
+            fissionable = bool(target.fissionableCells)
+            notes.append("spherical cell, white boundary")
+        elif driver is not None:
             driverModel = builder.build(driver, heterogeneous)
             if isHex:
                 root, targetCell, bounds = self._hexColorset(
@@ -159,20 +180,23 @@ class XSModelBuilder:
             fissionable = bool(target.fissionableCells)
             notes.append("infinite lattice")
 
-        # The block's own height, reflected: explicit particles are packed over it.
-        height = block.getHeight() or 1.0
-        bottom = openmc.ZPlane(0.0, boundary_type="reflective")
-        top = openmc.ZPlane(height, boundary_type="reflective")
-        for cell in root:
-            cell.region = (
-                (cell.region & +bottom & -top) if cell.region is not None else (+bottom & -top)
-            )
+        if spherical:
+            z0, z1 = bounds[0], bounds[2]
+        else:
+            # The block's own height, reflected: explicit particles are packed over it.
+            z0, z1 = 0.0, block.getHeight() or 1.0
+            bottom = openmc.ZPlane(z0, boundary_type="reflective")
+            top = openmc.ZPlane(z1, boundary_type="reflective")
+            for cell in root:
+                cell.region = (
+                    (cell.region & +bottom & -top) if cell.region is not None else (+bottom & -top)
+                )
         geometry_ = openmc.Geometry(openmc.Universe(cells=root))
         mats = openmc.Materials(materials.materials)
         mats.cross_sections = opts.crossSectionsPath
 
         x0, y0, x1, y1 = bounds
-        box = (x0, y0, 0.0, x1, y1, height)
+        box = (x0, y0, z0, x1, y1, z1)
         if fissionable:
             settings = makeSettings(opts, box)
         else:
@@ -245,35 +269,36 @@ class XSModelBuilder:
 
 
 def _xsTallies(targetCell, nuclides, bounds):
-    domain = openmc.CellFilter([targetCell])
+    """XS tallies over ``targetCell``, or over the whole model if it is None."""
+    domain = [openmc.CellFilter([targetCell])] if targetCell is not None else []
     energy = openmc.EnergyFilter(bounds)
     energyout = openmc.EnergyoutFilter(bounds)
 
     flux = openmc.Tally(name="xs flux")
-    flux.filters = [domain, energy]
+    flux.filters = [*domain, energy]
     flux.scores = ["flux", "inverse-velocity"]
     flux.estimator = REACTION_ESTIMATOR
 
     reactions = openmc.Tally(name="xs reactions")
-    reactions.filters = [domain, energy]
+    reactions.filters = [*domain, energy]
     reactions.nuclides = nuclides
     reactions.scores = REACTIONS
     reactions.estimator = REACTION_ESTIMATOR
 
     matrix = openmc.Tally(name="xs scatter matrix")
-    matrix.filters = [domain, energy, energyout]
+    matrix.filters = [*domain, energy, energyout]
     matrix.nuclides = nuclides
     matrix.scores = ["scatter", "nu-scatter"]
     matrix.estimator = "analog"
 
     p1 = openmc.Tally(name="xs scatter p1")
-    p1.filters = [domain, energy, openmc.LegendreFilter(1)]
+    p1.filters = [*domain, energy, openmc.LegendreFilter(1)]
     p1.nuclides = nuclides
     p1.scores = ["scatter"]
     p1.estimator = "analog"
 
     chi = openmc.Tally(name="xs chi")
-    chi.filters = [domain, energyout]
+    chi.filters = [*domain, energyout]
     chi.nuclides = nuclides + ["total"]
     chi.scores = ["nu-fission"]
     chi.estimator = "analog"

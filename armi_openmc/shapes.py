@@ -34,8 +34,8 @@ def isSolidShape(component):
 class Outline:
     """One closed 2D boundary: a circle, a hexagon, or a rectangle, centered at (x, y)."""
 
-    kind: str  # "circle", "hexagon" or "rectangle"
-    size: tuple  # diameter | flat-to-flat | (x width, y width)
+    kind: str  # "circle", "hexagon", "rectangle" or "sphere"
+    size: tuple  # diameter | flat-to-flat | (x width, y width) | diameter
     x: float = 0.0
     y: float = 0.0
     hexOrientation: str = "x"  # OpenMC HexagonalPrism orientation; 'x' = flats on top
@@ -48,7 +48,7 @@ class Outline:
 
     @property
     def circumscribedRadius(self):
-        if self.kind == "circle":
+        if self.kind in ("circle", "sphere"):
             return self.size[0] / 2.0
         if self.kind == "hexagon":
             return self.size[0] / SQRT3
@@ -56,6 +56,9 @@ class Outline:
 
     @property
     def area(self):
+        """Cross-section area; for a sphere, which orders by size the same way, its volume."""
+        if self.kind == "sphere":
+            return math.pi * self.size[0] ** 3 / 6.0
         if self.kind == "circle":
             return math.pi * self.size[0] ** 2 / 4.0
         if self.kind == "hexagon":
@@ -98,7 +101,12 @@ class Outline:
         return self.contains(other, tol) and other.contains(self, tol)
 
     def interior(self, boundaryType="transmission"):
-        """The OpenMC region inside this outline (an infinite prism along z)."""
+        """The OpenMC region inside this outline (an infinite prism along z, or a sphere)."""
+        if self.kind == "sphere":
+            surf = openmc.Sphere(
+                x0=self.x, y0=self.y, r=self.size[0] / 2.0, boundary_type=boundaryType
+            )
+            return -surf
         if self.kind == "circle":
             surf = openmc.ZCylinder(
                 x0=self.x, y0=self.y, r=self.size[0] / 2.0, boundary_type=boundaryType

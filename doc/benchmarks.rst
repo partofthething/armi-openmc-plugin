@@ -20,6 +20,10 @@ Summary
      - 1.12096 ± 0.00045
      - no continuous-energy reference
      - double heterogeneity +3,901 pcm (element)
+   * - LEUPRO-1 pebble cell, explicit particles, k-infinity
+     - 1.71563 ± 0.00037
+     - 1.7226 ± 0.0027 (MCNP, ENDF/B-VI)
+     - −0.40 %; double heterogeneity 1.0538 vs 1.0534
    * - FFTF isothermal critical, k-eff
      - 0.99576 ± 0.00032
      - 0.9993 ± 0.0021 (benchmark)
@@ -396,3 +400,69 @@ section code) must equal OpenMC's k-infinity of the block:
      - −0.08 %
 
 Both agree within about 1.3 standard deviations. The first case runs as a regression test.
+
+
+LEUPRO-1 pebble cell
+--------------------
+
+The LEUPRO-1 unit cell of the LEU-HTR PROTEUS calculational benchmarks (D. Mathews and
+R. Chawla, PSI TM-41-90-32, 1990; results compiled in `IAEA-TECDOC-1249
+<https://www-pub.iaea.org/MTCD/Publications/PDF/te_1249_prn.pdf>`_, section 3.1) is a numerical
+benchmark for double heterogeneity: a 6 cm pebble whose 5 cm fuel zone holds 9,393.6 coated
+particles of 16.76 %-enriched UO\ :sub:`2` (0.502 mm kernels, 0.9154 mm particles, a packing
+fraction of 5.76 %), inside a sphere of 3.7959 cm radius that holds the pebble's share of a
+hexagonal close packed bed (half a moderator pebble and the voids), with a white boundary.
+Compositions are those of J. R. Johnson, *Monte Carlo Study of Pebble Bed Reactor Fuel
+Reactivity and Isotopics*, MIT (2001), `online <https://dspace.mit.edu/handle/1721.1/8691>`_,
+Tables 2-1 and 2-2, which reproduce the PSI specification.
+
+In ARMI the cell is a ``SphericalBlock``: three ``Sphere`` components, the fuel zone holding the
+particles. The plugin draws the spheres, packs every particle at random in the fuel zone, and
+closes the outer sphere with a white boundary. Three representations bracket the effect:
+
+.. list-table:: k-infinity, 20,000 × 250 (50 inactive)
+   :header-rows: 1
+
+   * - Model
+     - armi-openmc (ENDF/B-VIII.1)
+     - Johnson (MCNP, ENDF/B-VI)
+     - ORNL (MCNP, ENDF/B-V)
+     - ECN (MCNP, JEF-2.2)
+   * - Every particle explicit
+     - 1.71563 ± 0.00037
+     - 1.7226 ± 0.0027
+     - 1.7219 ± 0.0031
+     - 1.7291 ± 0.0006
+   * - Particles smeared in the fuel zone
+     - 1.62804 ± 0.00042
+     - 1.6353 ± 0.0009
+     - 1.6319 ± 0.0032
+     - 1.6404 ± 0.0010
+   * - Whole cell homogenized
+     - 1.58401 ± 0.00042
+     - 1.5908 ± 0.0011
+     - 1.5878 ± 0.0032
+     -
+   * - Explicit / smeared
+     - 1.0538
+     - 1.0534
+     - 1.0551
+     - 1.0541
+
+The reference values are Johnson's Table 3-1 (which also lists ECN and ORNL) and
+IAEA-TECDOC-1249 Tables 3.1.2–3.1.4. The references put the particles on a cubic lattice;
+T. J. Donovan and Y. Danon (2003) found random packing about 0.16 % more reactive (1.7261 against
+1.7233).
+
+* **Double heterogeneity is right.** Resolving the particles is worth 5.38 % in k here and
+  5.34–5.51 % in the references; this ratio cancels most of the nuclear data and is what the
+  benchmark tests.
+* **A common data offset.** All three models sit 0.40–0.44 % below Johnson's ENDF/B-VI results (and
+  0.24–0.36 % below ORNL's), the same in the homogenized cell, where geometry plays no part. The
+  difference is therefore in the data rather than the particles. Graphite is the main suspect,
+  because the cell is 95 % carbon and ENDF/B-VIII changed the graphite thermal scattering
+  evaluation; this has not been isolated.
+* **The cross sections close.** The k-infinity rebuilt from each ISOTXS is 1.71608, 1.62785 and
+  1.58396.
+
+The explicit cell takes 11 minutes on 12 threads, the others 4.

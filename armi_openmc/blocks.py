@@ -13,6 +13,7 @@ lattice, an infinite-lattice cell) clips it to the block's footprint. Two repres
   fill a rectangular or hexagonal lattice with the block grid's pitch and orientation.
 * *Shells* are single centered shapes (ducts, cans, liners, an intercoolant hexagon), nested by
   size around the pin lattice.
+* *Spherical blocks* (a pebble's unit cell) are concentric spheres, each a component.
 * Everything else fills the space that is left. ``DerivedShape`` coolant is what ARMI already
   defines that way. Components OpenMC cannot draw exactly, such as helical wire wraps, are smeared
   into that same background by area, which is what they physically displace.
@@ -33,11 +34,16 @@ from armi import runLog
 from armi.nucDirectory import nuclideBases
 from armi.reactor import grids
 from armi.reactor.blocks import HexBlock
-from armi.reactor.components import DerivedShape
+from armi.reactor.components import DerivedShape, Sphere
 
 from armi_openmc import particles as particleFill
 from armi_openmc import shapes
 from armi_openmc.materials import MaterialFactory, mixNumberDensities
+
+try:  # the ARMI fork with spherical (pebble) unit cells
+    from armi.reactor.blocks import SphericalBlock
+except ImportError:  # pragma: no cover - older ARMI
+    SphericalBlock = ()
 
 ROUND = 9  # decimals kept on dimensions so that equal ARMI dimensions give identical surfaces
 
@@ -110,8 +116,14 @@ def hexLatticeOrientationOf(grid):
     return "x" if getattr(grid, "cornersUp", False) else "y"
 
 
+def isSpherical(b):
+    return bool(SphericalBlock) and isinstance(b, SphericalBlock)
+
+
 def blockOutline(b, hexOrientation="x"):
-    """The footprint of a block: its hexagon or rectangle of pitch size."""
+    """The footprint of a block: its hexagon or rectangle of pitch size, or its outer sphere."""
+    if isSpherical(b):
+        return _rounded(shapes.Outline("sphere", (float(b.getPitch()),)))
     if isinstance(b, HexBlock):
         return _rounded(
             shapes.Outline("hexagon", (float(b.getPitch()),), hexOrientation=hexOrientation)
@@ -177,6 +189,8 @@ class BlockBuilder:
         return BlockModel(b, universe, False, fissionable)
 
     def _heterogeneous(self, b):
+        if isSpherical(b):
+            return self._spherical(b)
         shells, pinsAt, background = self._classify(b)
         if not shells and not pinsAt:
             raise Unrepresentable("it has no components with a drawable shape")
@@ -266,6 +280,29 @@ class BlockBuilder:
             )
         return self._finish(b, cells, fissionable, model)
 
+    def _spherical(self, b):
+        """Concentric spheres, innermost first, each filling the space up to the next."""
+        spheres = sorted(
+            (c for c in b.iterComponents() if not particleFill.isParticleLayer(c)),
+            key=lambda c: c.getDimension("od"),
+        )
+        cells, fissionable = [], []
+        inner = None
+        for c in spheres:
+            if not isinstance(c, Sphere) or c.getDimension("mult") != 1:
+                raise Unrepresentable(f"{c.name} is not a single sphere")
+            iD, od = (c.getDimension("id") or 0.0), c.getDimension("od")
+            previous = inner.size[0] if inner is not None else 0.0
+            if abs(iD - previous) > 1e-6:
+                raise Unrepresentable(f"{c.name} starts at {iD} cm, not at {previous} cm")
+            outer = _rounded(shapes.Outline("sphere", (float(od),)))
+            region = self.surfaces.inside(outer)
+            if inner is not None:
+                region &= self.surfaces.outside(inner)
+            cells.append(self._componentCell(b, c, region, fissionable))
+            inner = outer
+        return self._finish(b, cells, fissionable)
+
     def _finish(self, b, cells, fissionable, model=None):
         model = model or BlockModel(b, None, True)
         model.universe = openmc.Universe(name=b.getName(), cells=cells)
@@ -334,7 +371,8 @@ class BlockBuilder:
             cell = openmc.Cell(
                 name=f"{b.getName()} {c.name}", fill=self.particles.fill(b, c), region=region
             )
-            cell.translation = (0.0, 0.0, self._zOrigin)
+            if not isinstance(c, Sphere):  # a prism's particles stack up from the block bottom
+                cell.translation = (0.0, 0.0, self._zOrigin)
             if any(_hasActinides(layer) for layer in layers):
                 fissionable.append(cell)
             return cell

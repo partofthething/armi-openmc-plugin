@@ -1,0 +1,20 @@
+# LEUPRO-1 pebble cell, every coated particle explicit (double heterogeneity). Run: python -m armi_openmc openmc-xs leupro1-explicit.yaml --xs-ids AA --output ISOAA-explicit
+settings:
+  comment: LEUPRO-1 pebble cell, every coated particle explicit (double heterogeneity)
+  loadingFile: leupro1-blueprints.yaml
+  nCycles: 1
+  burnSteps: 0
+  power: 1000.0
+  genReports: false
+  groupStructure: ANL33
+  xsKernel: OpenMC
+  xsBlockRepresentation: Median
+  openmcCrossSections: /mnt/storage/nuclear_data/openmc/endfb-viii.1-hdf5/cross_sections.xml
+  openmcParticles: 20000
+  openmcBatches: 250
+  openmcInactiveBatches: 50
+  openmcBlockModel: heterogeneous
+  openmcParticleModel: explicit
+  openmcPlotGeometry: true
+  versions:
+    armi: uncontrolled

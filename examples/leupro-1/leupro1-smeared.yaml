@@ -1,0 +1,20 @@
+# LEUPRO-1 pebble cell, particles smeared into the fuel zone (single heterogeneity). Run: python -m armi_openmc openmc-xs leupro1-smeared.yaml --xs-ids AA --output ISOAA-smeared
+settings:
+  comment: LEUPRO-1 pebble cell, particles smeared into the fuel zone (single heterogeneity)
+  loadingFile: leupro1-blueprints.yaml
+  nCycles: 1
+  burnSteps: 0
+  power: 1000.0
+  genReports: false
+  groupStructure: ANL33
+  xsKernel: OpenMC
+  xsBlockRepresentation: Median
+  openmcCrossSections: /mnt/storage/nuclear_data/openmc/endfb-viii.1-hdf5/cross_sections.xml
+  openmcParticles: 20000
+  openmcBatches: 250
+  openmcInactiveBatches: 50
+  openmcBlockModel: heterogeneous
+  openmcParticleModel: homogenized
+  openmcPlotGeometry: true
+  versions:
+    armi: uncontrolled

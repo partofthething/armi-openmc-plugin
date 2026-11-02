@@ -1,0 +1,139 @@
+# LEUPRO-1 pebble unit cell (LEU-HTR PROTEUS calculational benchmark, IAEA-TECDOC-1249 section 3.1).
+#
+# A spherical cell of three zones with a white outer boundary:
+#   fuel zone, r = 2.5 cm: 9,393.6 coated particles in a graphite matrix
+#   graphite shell, to r = 3.0 cm (the 6 cm fuel pebble)
+#   the pebble's share of the bed, to r = 3.7959 cm: half a moderator pebble and the voids
+#       (humid air) of a hexagonal close packed lattice, smeared by volume
+#
+# Number densities (atoms/barn-cm) from J.R. Johnson, "Monte Carlo Study of Pebble Bed Reactor
+# Fuel Reactivity and Isotopics", MIT S.B. thesis (2001), Tables 2-1 and 2-2, which reproduce the
+# PSI specification (D. Mathews and R. Chawla, TM-41-90-32, 1990). The particle's layer diameters
+# come from the volumes of Table 2-2. Natural carbon and silicon are given as elements.
+nuclide flags:
+    U235: {burn: false, xs: true}
+    U238: {burn: false, xs: true}
+    O16: {burn: false, xs: true}
+    B10: {burn: false, xs: true}
+    B11: {burn: false, xs: true}
+    C: {burn: false, xs: true}
+    SI: {burn: false, xs: true}
+    H1: {burn: false, xs: true}
+    H2: {burn: false, xs: true}
+    N14: {burn: false, xs: true}
+    N15: {burn: false, xs: true}
+custom isotopics:
+    UO2 kernel:
+        input format: number densities
+        O16: 4.86157e-2
+        U235: 4.11729e-3
+        U238: 2.01906e-2
+    buffer:
+        input format: number densities
+        B10: 1.58108e-8
+        B11: 6.40418e-8
+        C: 5.51511e-2
+    PyC:
+        input format: number densities
+        B10: 2.73095e-8
+        B11: 1.10617e-7
+        C: 9.52609e-2
+    SiC:
+        input format: number densities
+        B10: 1.38e-8
+        B11: 5.58080e-8
+        C: 4.80603e-2
+        SI: 4.80603e-2
+    graphite:  # the fuel zone's matrix and the pebble's shell
+        input format: number densities
+        B10: 2.47855e-8
+        B11: 1.00394e-7
+        C: 8.64563e-2
+    moderator and air:
+        input format: number densities
+        H1: 2.97225e-7
+        H2: 4.45905e-11
+        B10: 1.17151e-8
+        B11: 4.74520e-8
+        C: 4.08644e-2
+        N14: 2.04260e-5
+        N15: 7.50350e-8
+        O16: 5.12530e-6
+particles:
+    coated particle:
+        kernel:
+            material: Custom
+            isotopics: UO2 kernel
+            od: 0.0502
+            flags: fuel depletable
+        buffer:
+            material: Custom
+            isotopics: buffer
+            od: 0.0685
+        inner PyC:
+            material: Custom
+            isotopics: PyC
+            od: 0.07648
+        SiC:
+            material: Custom
+            isotopics: SiC
+            od: 0.08354
+        outer PyC:
+            material: Custom
+            isotopics: PyC
+            od: 0.09154
+blocks:
+    pebble cell: &block_pebble
+        flags: fuel
+        fuel zone:
+            shape: Sphere
+            material: Custom
+            isotopics: graphite
+            Tinput: 20.0
+            Thot: 20.0
+            id: 0.0
+            od: 5.0
+            mult: 1
+            particles: coated particle
+            packingFraction: 0.0576441  # 9,393.6 particles
+        graphite shell:
+            shape: Sphere
+            material: Custom
+            isotopics: graphite
+            Tinput: 20.0
+            Thot: 20.0
+            id: 5.0
+            od: 6.0
+            mult: 1
+        moderator and air:
+            shape: Sphere
+            material: Custom
+            isotopics: moderator and air
+            Tinput: 20.0
+            Thot: 20.0
+            id: 6.0
+            od: 7.5918
+            mult: 1
+assemblies:
+    pebble:
+        specifier: P
+        blocks: [*block_pebble]
+        height: [10.0]  # bookkeeping only: a spherical block's volumes are its spheres'
+        axial mesh points: [1]
+        xs types: [A]
+systems:
+    core:
+        grid name: core
+        origin:
+            x: 0.0
+            y: 0.0
+            z: 0.0
+grids:
+    core:
+        geom: cartesian
+        symmetry: full
+        lattice pitch:
+            x: 7.5918
+            y: 7.5918
+        lattice map: |
+            P

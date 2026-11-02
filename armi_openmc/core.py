@@ -71,6 +71,12 @@ class CoreModelBuilder:
     # ----------------------------------------------------------------------------------------
     def build(self) -> CoreModel:
         opts = self.options
+        spherical = [b for b in self.core.iterBlocks() if blockModels.isSpherical(b)]
+        if spherical:
+            raise ValueError(
+                f"{spherical[0]} is a spherical unit cell, which has no place in a core lattice. "
+                "Run it with openmc-xs, or model the pebble bed with prismatic blocks."
+            )
         result = CoreModel(model=None)
         positions, result.cut = self._positions()
         result.domainFraction = 1.0 / self.core.powerMultiplier if result.cut else 1.0

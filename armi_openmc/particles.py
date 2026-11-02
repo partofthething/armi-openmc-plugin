@@ -17,6 +17,8 @@ host is packed in segments of about ``openmcParticleSegmentLength`` and the segm
 the block. Each segment is a closed packing domain, like the individual compacts stacked in a real
 fuel hole: particles do not cross segment faces.
 
+A spherical host (the fuel zone of a pebble) is packed whole, centered on the origin.
+
 Identical hosts (same dimensions, particle count and compositions) share one packed universe, so a
 core of fresh fuel blocks packs a compact once, and packings are cached on disk by their parameters.
 """
@@ -78,25 +80,16 @@ class ParticleFiller:
 
     def whyNotExplicit(self, host):
         """None if the host can be packed explicitly, else the reason it cannot."""
-        if type(host).__name__ != "Circle":
-            return f"particles in a {type(host).__name__} are only drawn in solid circles"
-        if host.getDimension("id") > 0.0:
-            return "particles in an annulus cannot be packed"
+        if type(host).__name__ not in ("Circle", "Sphere"):
+            return (
+                f"particles in a {type(host).__name__} are only drawn in solid circles or spheres"
+            )
+        if (host.getDimension("id") or 0.0) > 0.0:
+            return "particles in a hollow host cannot be packed"
         return None
 
-    def fill(self, b, host):
-        """
-        A universe of the host's particles, packed explicitly, centered on the host's axis.
-
-        The universe spans z from 0 to the block height; the cell it fills must be translated to
-        the block's bottom.
-        """
+    def _materials(self, host):
         layers = particleLayers(host)
-        height = b.getHeight()
-        segments = max(1, round(height / self.options.particleSegmentLength))
-        segment = height / segments
-        radius = host.getDimension("od") / 2.0
-        perSegment = round(layers[0].getDimension("mult") / host.getDimension("mult") * segment)
         layerMaterials = [
             self.materials.make(f"{c.name}", c.getNumberDensities(), c.temperatureInC, reuse=True)
             for c in layers
@@ -105,6 +98,24 @@ class ParticleFiller:
             f"{host.name} matrix", host.getNumberDensities(), host.temperatureInC, reuse=True
         )
         radii = tuple(round(c.getDimension("od") / 2.0, 9) for c in layers)
+        return radii, layerMaterials, matrix
+
+    def fill(self, b, host):
+        """
+        A universe of the host's particles, packed explicitly, centered on the host's axis.
+
+        The universe spans z from 0 to the block height; the cell it fills must be translated to
+        the block's bottom.
+        """
+        if type(host).__name__ == "Sphere":
+            return self._fillSphere(host)
+        layers = particleLayers(host)
+        height = b.getHeight()
+        segments = max(1, round(height / self.options.particleSegmentLength))
+        segment = height / segments
+        radius = host.getDimension("od") / 2.0
+        perSegment = round(layers[0].getDimension("mult") / host.getDimension("mult") * segment)
+        radii, layerMaterials, matrix = self._materials(host)
         key = (
             round(radius, 9),
             round(segment, 9),
@@ -127,6 +138,31 @@ class ParticleFiller:
             )
         return self._universes[key]
 
+    def _fillSphere(self, host):
+        """A universe of the particles packed in a spherical host, centered on the origin."""
+        radius = host.getDimension("od") / 2.0
+        count = round(particleLayers(host)[0].getParticleCount())
+        radii, layerMaterials, matrix = self._materials(host)
+        key = ("sphere", round(radius, 9), count, radii, tuple(map(id, layerMaterials)), id(matrix))
+        if key not in self._universes:
+            particle = self._particleUniverse(radii, layerMaterials)
+            centers = self._pack(radii[-1], radius, None, count)
+            pitch = self.options.particleMeshPitch or _autoPitch(radii[-1], count, _sphere(radius))
+            n = max(1, math.ceil(2.0 * radius / pitch))
+            trisos = [openmc.model.TRISO(radii[-1], particle, center=c) for c in centers]
+            mesh = openmc.model.create_triso_lattice(
+                trisos, (-radius,) * 3, (2.0 * radius / n,) * 3, (n, n, n), matrix
+            )
+            self._universes[key] = openmc.Universe(
+                name="particles", cells=[openmc.Cell(name="packed sphere", fill=mesh)]
+            )
+            fraction = count * _sphere(radii[-1]) / _sphere(radius)
+            runLog.info(
+                f"OpenMC: packed {count} particles in {host.name} "
+                f"(packing fraction {fraction:.4f}) on a {n}^3 mesh"
+            )
+        return self._universes[key]
+
     # ----------------------------------------------------------------------------------------
     def _particleUniverse(self, radii, layerMaterials):
         key = (radii, tuple(id(m) for m in layerMaterials))
@@ -144,20 +180,27 @@ class ParticleFiller:
         return self._particleUniverses[key]
 
     def _pack(self, particleRadius, radius, segment, count):
-        """Particle centers in a cylinder of ``radius``, z from -segment/2 to segment/2, cached."""
+        """
+        Particle centers in a cylinder of ``radius``, z from -segment/2 to segment/2, or in a
+        sphere of ``radius`` if ``segment`` is None; cached.
+        """
         seed = int(self.options.particleSeed)
-        tag = f"{particleRadius:.9f}-{radius:.9f}-{segment:.9f}-{count}-{seed}"
+        shape = "sphere" if segment is None else f"{segment:.9f}"
+        tag = f"{particleRadius:.9f}-{radius:.9f}-{shape}-{count}-{seed}"
         cacheDir = os.path.join(self.options.runDir, "particle-packings")
         path = os.path.join(cacheDir, hashlib.sha1(tag.encode()).hexdigest()[:16] + ".npy")
         if os.path.exists(path):
             centers = np.load(path)
             if len(centers) == count:
                 return centers
-        region = (
-            -openmc.ZCylinder(r=radius)
-            & +openmc.ZPlane(-segment / 2.0)
-            & -openmc.ZPlane(segment / 2.0)
-        )
+        if segment is None:
+            region = -openmc.Sphere(r=radius)
+        else:
+            region = (
+                -openmc.ZCylinder(r=radius)
+                & +openmc.ZPlane(-segment / 2.0)
+                & -openmc.ZPlane(segment / 2.0)
+            )
         centers = openmc.model.pack_spheres(particleRadius, region, num_spheres=count, seed=seed)
         os.makedirs(cacheDir, exist_ok=True)
         np.save(path, centers)
@@ -166,7 +209,7 @@ class ParticleFiller:
     def _stack(self, particle, centers, particleRadius, radius, segment, segments, matrix):
         """The packed segment, on its Cartesian mesh, stacked ``segments`` high from z = 0."""
         pitch = self.options.particleMeshPitch or _autoPitch(
-            particleRadius, len(centers), radius, segment
+            particleRadius, len(centers), math.pi * radius**2 * segment
         )
         nxy = max(1, math.ceil(2.0 * radius / pitch))
         nz = max(1, math.ceil(segment / pitch))
@@ -192,7 +235,7 @@ def _sphere(r):
     return 4.0 / 3.0 * math.pi * r**3
 
 
-def _autoPitch(particleRadius, count, radius, segment):
+def _autoPitch(particleRadius, count, volume):
     """A mesh pitch that puts about ``PARTICLES_PER_ELEMENT`` particle centers in each element."""
-    density = count / (math.pi * radius**2 * segment)
+    density = count / volume
     return max(2.0 * particleRadius, (PARTICLES_PER_ELEMENT / density) ** (1.0 / 3.0))

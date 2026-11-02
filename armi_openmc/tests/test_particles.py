@@ -153,3 +153,50 @@ def test_offCenterChannelIsCarvedOut(element, tmp_path):
     pins = next(c for c in model.universe.cells.values() if c.name.endswith(" pins"))
     assert surface.id in pins.region.get_surfaces()
     assert math.isclose(element.getComponentByName("channel").getArea(), math.pi / 4.0)
+
+
+@pytest.fixture(scope="module")
+def pebble():
+    from armi import settings
+    from armi.reactor import blueprints
+
+    bpTests = pytest.importorskip("armi.reactor.blueprints.tests.test_particleBlueprints")
+    if not hasattr(bpTests, "PEBBLE_BLUEPRINT"):
+        pytest.skip("ARMI without spherical blocks")
+    packing = bpTests.PEBBLE_PARTICLES * particles.sphereVolume(0.09154) / particles.sphereVolume(5)
+    text = bpTests.PEBBLE_BLUEPRINT.replace("PACKING", repr(packing))
+    return blueprints.Blueprints.load(text).constructAssem(settings.Settings(), "pebble")[0]
+
+
+@needsData
+def test_pebbleCellIsConcentricSpheres(pebble, tmp_path):
+    model = _builder("homogenized", tmp_path).build(pebble)
+    radii = sorted(
+        s.r for c in model.universe.cells.values() for s in c.region.get_surfaces().values()
+    )
+    assert sorted(set(radii)) == pytest.approx([2.5, 3.0, 3.7959])
+    assert [c.name.split()[-1] for c in model.fissionableCells] == ["zone"]
+
+
+@needsData
+def test_explicitParticlesFillThePebble(pebble, tmp_path):
+    model = _builder("explicit", tmp_path).build(pebble)
+    (packing,) = (tmp_path / "particle-packings").glob("*.npy")
+    centers = np.load(packing)
+    assert len(centers) == 9394  # 9,393.6 particles, rounded
+    assert np.linalg.norm(centers, axis=1).max() <= 2.5 - 0.09154 / 2 + 1e-9
+    zone = next(c for c in model.fissionableCells if c.name.endswith("fuel zone"))
+    assert zone.translation is None
+
+
+@needsData
+def test_pebbleCellHasAWhiteBoundary(pebble, tmp_path):
+    from armi_openmc.mgxs import XSModelBuilder
+
+    opts = OpenMCOptions(crossSections=crossSections(), runDir=str(tmp_path))
+    xs = XSModelBuilder(opts).build(pebble, "AA", ["U235", "U238", "C"])
+    surfaces = xs.model.geometry.get_all_surfaces().values()
+    boundaries = {
+        (round(s.r, 6), s.boundary_type) for s in surfaces if isinstance(s, openmc.Sphere)
+    }
+    assert [r for r, kind in boundaries if kind == "white"] == [3.7959]

@@ -72,3 +72,29 @@ makes its ISOTXS with OpenMC (XS mode), and compares the two, collapsing with th
 These are ENDF/B-VIII.1 against MC2-3's ENDF/B-VII.0, with MC2-3 adding leakage through its
 buckling search. Iron's transport cross section is 13–20% higher here, because MC2-3 weights
 transport by current and this plugin by flux, which differ most in iron's resonance windows.
+
+## LEUPRO-1 pebble cell (`leupro-1/`)
+
+The LEUPRO-1 unit cell of the LEU-HTR PROTEUS calculational benchmarks (IAEA-TECDOC-1249,
+section 3.1): one 6 cm pebble of 16.76%-enriched UO2 coated particles (9,393.6 of them in a
+5 cm fuel zone) inside a sphere holding its share of the hexagonal close packed bed, closed with
+a white boundary. In ARMI it is a `SphericalBlock` of three `Sphere` components, the fuel zone
+holding the particles; compositions are those of J.R. Johnson's MIT thesis (2001), which
+reproduces the PSI specification.
+
+```bash
+cd leupro-1
+python -m armi_openmc openmc-xs leupro1-explicit.yaml --xs-ids AA --output ISOAA-explicit
+python -m armi_openmc openmc-xs leupro1-smeared.yaml --xs-ids AA --output ISOAA-smeared
+python -m armi_openmc openmc-xs leupro1-homogeneous.yaml --xs-ids AA --output ISOAA-homogeneous
+```
+
+| k-infinity | armi-openmc (ENDF/B-VIII.1) | Johnson (MCNP, ENDF/B-VI) | ORNL (MCNP, ENDF/B-V) | ECN (MCNP, JEF-2.2) |
+|---|---|---|---|---|
+| Every particle explicit | 1.71563 ± 0.00037 | 1.7226 ± 0.0027 | 1.7219 ± 0.0031 | 1.7291 ± 0.0006 |
+| Particles smeared in the fuel zone | 1.62804 ± 0.00042 | 1.6353 ± 0.0009 | 1.6319 ± 0.0032 | 1.6404 ± 0.0010 |
+| Whole cell homogenized | 1.58401 ± 0.00042 | 1.5908 ± 0.0011 | 1.5878 ± 0.0032 | |
+| Double heterogeneity (explicit / smeared) | 1.0538 | 1.0534 | 1.0551 | 1.0541 |
+
+Runs of 20k × 250 on 12 threads: 4 minutes homogenized, 11 minutes explicit. Each ISOTXS
+rebuilds its cell's k-infinity (1.71608, 1.62785, 1.58396).
