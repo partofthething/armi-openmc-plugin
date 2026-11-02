@@ -51,6 +51,7 @@ MC2-3 cross section library.
    installation
    usage
    settings
+   triso
 
 .. toctree::
    :maxdepth: 2

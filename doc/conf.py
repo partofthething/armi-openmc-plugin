@@ -27,7 +27,11 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
+    "myst_nb",
 ]
+# Notebooks are run locally (they need OpenMC and nuclear data) and committed with their outputs.
+nb_execution_mode = "off"
+myst_enable_extensions = ["dollarmath"]
 autodoc_member_order = "bysource"
 autodoc_inherit_docstrings = False  # ARMI's hook docstrings use sphinx-needs directives
 autodoc_default_options = {"members": True, "show-inheritance": True}
@@ -37,7 +41,7 @@ intersphinx_mapping = {
     "openmc": ("https://docs.openmc.org/en/stable", None),
     "armi": ("https://partofthething.github.io/armi", None),
 }
-exclude_patterns = ["_build", "make_figures.py"]
+exclude_patterns = ["_build", "make_figures.py", "_notebook-runs", "**.ipynb_checkpoints"]
 nitpicky = False
 
 html_theme = "sphinx_book_theme"

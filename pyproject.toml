@@ -24,7 +24,7 @@ Issues = "https://github.com/partofthething/armi-openmc-plugin/issues"
 
 [project.optional-dependencies]
 test = ["pytest", "ruff==0.17.3"]
-docs = ["sphinx>=8", "sphinx-book-theme>=1.1", "matplotlib"]
+docs = ["sphinx>=8", "sphinx-book-theme>=1.1", "matplotlib", "myst-nb>=1.1"]
 
 [project.scripts]
 armi-openmc = "armi_openmc.__main__:main"

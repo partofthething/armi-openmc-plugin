@@ -17,3 +17,5 @@ examples/**/*.ascii
 pyrightconfig.json
 doc/_build/
 doc/_generated/
+doc/_notebook-runs/
+.ipynb_checkpoints/
