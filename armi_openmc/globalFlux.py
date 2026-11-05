@@ -55,15 +55,32 @@ class OpenMCExecuter(gfi.GlobalFluxExecuter):
         workdir = os.path.join(opts.openmc.runDir, opts.label or "openmc")
         os.makedirs(workdir, exist_ok=True)
         coreModel = CoreModelBuilder(self.r.core, opts.openmc).build()
-        coreModel.model.export_to_model_xml(os.path.join(workdir, "model.xml"))
-        if opts.openmc.plotGeometry:
-            runner.run(opts.openmc, workdir, args=["-p"], logName="plot.out")
-        statepoint = runner.run(opts.openmc, workdir)
+        modelPath = os.path.join(workdir, "model.xml")
+        previous = _read(modelPath)
+        coreModel.model.export_to_model_xml(modelPath)
+        statepoint = None
+        if opts.openmc.reuseStatepoint and previous is not None and previous == _read(modelPath):
+            statepoint = runner.lastStatepoint(workdir)
+            if statepoint:
+                runLog.important(
+                    f"OpenMC: reusing {statepoint}, whose model is identical to this one"
+                )
+        if statepoint is None:
+            if opts.openmc.plotGeometry:
+                runner.run(opts.openmc, workdir, args=["-p"], logName="plot.out")
+            statepoint = runner.run(opts.openmc, workdir)
         results = CoreResults(coreModel, statepoint)
         mapper = OpenMCResultMapper(results, opts.power, r=self.r, cs=opts.cs)
         if opts.applyResultsToReactor:
             mapper.apply(self.r)
         return mapper
+
+
+def _read(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
 
 
 class OpenMCResultMapper(gfi.GlobalFluxResultMapper):

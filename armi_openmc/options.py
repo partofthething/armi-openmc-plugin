@@ -48,6 +48,7 @@ class OpenMCOptions:
 
     runDir: str = "openmc-runs"
     plotGeometry: bool = False
+    reuseStatepoint: bool = False
 
     _SETTINGS = {
         "particles": S.CONF_PARTICLES,
@@ -81,6 +82,7 @@ class OpenMCOptions:
         "xsTraceDensity": S.CONF_XS_TRACE_DENSITY,
         "runDir": S.CONF_RUN_DIR,
         "plotGeometry": S.CONF_PLOT,
+        "reuseStatepoint": S.CONF_REUSE,
     }
 
     @classmethod

@@ -46,6 +46,7 @@ CONF_PARTICLE_SEED = "openmcParticleSeed"
 CONF_PARTICLE_MESH_PITCH = "openmcParticleMeshPitch"
 CONF_RUN_DIR = "openmcRunDir"
 CONF_PLOT = "openmcPlotGeometry"
+CONF_REUSE = "openmcReuseStatepoint"
 
 BOUNDARIES = ["vacuum", "reflective"]
 
@@ -308,6 +309,16 @@ def defineSettings():
             default=False,
             label="Plot geometry",
             description="Write PNG slices of each model geometry beside its inputs.",
+        ),
+        setting.Setting(
+            CONF_REUSE,
+            default=False,
+            label="Reuse a finished statepoint",
+            description=(
+                "Read the statepoint already in the run directory instead of running OpenMC, "
+                "when its model.xml is identical to the one this run builds: recovers a run "
+                "whose OpenMC finished but whose ARMI side did not."
+            ),
         ),
     ]
 

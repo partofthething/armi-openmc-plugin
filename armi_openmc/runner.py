@@ -137,7 +137,13 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
         )
     if plotting:
         return None
-    statepoints = sorted(glob.glob(os.path.join(workdir, "statepoint.*.h5")), key=os.path.getmtime)
-    if not statepoints:
+    statepoint = lastStatepoint(workdir)
+    if statepoint is None:
         raise OpenMCRunError(f"OpenMC wrote no statepoint in {workdir}")
-    return statepoints[-1]
+    return statepoint
+
+
+def lastStatepoint(workdir):
+    """The newest statepoint in ``workdir``, or None."""
+    statepoints = sorted(glob.glob(os.path.join(workdir, "statepoint.*.h5")), key=os.path.getmtime)
+    return statepoints[-1] if statepoints else None

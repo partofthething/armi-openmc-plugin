@@ -31,3 +31,17 @@ def test_smearingRepresentativeBlocksAreFlagged():
     with mockRunLogs.BufferLog() as log:
         warnIfSmeared(cs, OpenMCOptions(blockModel="heterogeneous"))
         assert "Use Median" not in log.getStdout()
+
+
+def test_lastStatepointIsTheNewest(tmp_path):
+    import os
+    import time
+
+    from armi_openmc import runner
+
+    assert runner.lastStatepoint(str(tmp_path)) is None
+    for n in (50, 100):
+        (tmp_path / f"statepoint.{n}.h5").write_bytes(b"")
+        time.sleep(0.01)
+    os.utime(tmp_path / "statepoint.100.h5")
+    assert runner.lastStatepoint(str(tmp_path)).endswith("statepoint.100.h5")
