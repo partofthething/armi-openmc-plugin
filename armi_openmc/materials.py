@@ -68,6 +68,11 @@ class NuclideMapper:
         name = f"{symbol}{base.a}" + (f"_m{base.state}" if base.state else "")
         if name in self.available:
             return [(name, 1.0)]
+        natural = f"{symbol}0"
+        if natural in self.available:
+            # Some libraries have an element only as its natural evaluation (C0 in ENDF/B-VII.1).
+            self._note(armiName, f"is carried by the natural-element evaluation {natural}")
+            return [(natural, 1.0)]
         self._warn(armiName, f"({name}) is not in the nuclear data library")
         return []
 
@@ -78,6 +83,8 @@ class NuclideMapper:
             if openmc.data.zam(nuc)[0] == openmc.data.ATOMIC_NUMBER[symbol]
         }
         present = {nuc: frac for nuc, frac in abundances.items() if nuc in self.available}
+        if not present and f"{symbol}0" in self.available:
+            return [(f"{symbol}0", 1.0)]
         if not present:
             self._warn(armiName, "has no natural isotopes in the nuclear data library")
             return []
@@ -90,6 +97,11 @@ class NuclideMapper:
             )
         total = sum(present.values())
         return [(nuc, frac / total) for nuc, frac in sorted(present.items())]
+
+    def _note(self, armiName, what):
+        if armiName not in self._warned:
+            self._warned.add(armiName)
+            runLog.info(f"OpenMC: nuclide {armiName} {what}.")
 
     def _warn(self, armiName, why):
         if armiName not in self._warned:

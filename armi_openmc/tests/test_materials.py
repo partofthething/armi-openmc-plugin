@@ -31,6 +31,22 @@ def test_voidIsNone(mapper):
     assert MaterialFactory(mapper).make("gap", {}, 20.0) is None
 
 
+def test_naturalEvaluationCarriesMissingIsotopes(tmp_path):
+    """A library with only natural carbon (ENDF/B-VII.1's C0) still gets the carbon."""
+    library = tmp_path / "cross_sections.xml"
+    library.write_text(
+        '<?xml version="1.0"?>\n<cross_sections>\n'
+        '  <library materials="C0" path="C0.h5" type="neutron" />\n'
+        '  <library materials="Fe56" path="Fe56.h5" type="neutron" />\n'
+        "</cross_sections>\n"
+    )
+    mapper = NuclideMapper(str(library))
+    assert mapper.expand("C12") == [("C0", 1.0)]
+    assert mapper.expand("C") == [("C0", 1.0)]
+    assert mapper.expand("FE56") == [("Fe56", 1.0)]
+    assert mapper.expand("U235") == []
+
+
 def test_mixByVolume():
     mixed, temp = mixNumberDensities([({"A": 1.0}, 1.0, 100.0), ({"A": 0.0, "B": 2.0}, 3.0, 200.0)])
     assert mixed == {"A": 0.25, "B": 1.5}

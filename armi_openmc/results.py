@@ -136,8 +136,31 @@ class CoreResults:
                 ordered.append(powers.get((i, j), 0.0) * share / height)
             if ordered:
                 b.p.linPowByPin = np.array(ordered)
+                _applyPerInstance(b, np.array(ordered) * height)
             b.p.openmcPinPowers = np.array([powers[k] * share for k in sorted(powers)])
             b.p.openmcPinIndices = np.array(sorted(powers))
+
+
+def _applyPerInstance(block, pinPower):
+    """
+    Each pin's power density on the pellet of its site, one value per instance in the order of the
+    component's ``pinIndices``, which is how ARMI's database and its UI show pins.
+
+    ``pinPower`` is in W per pin, ordered like ``block.getPinLocations()``. The innermost component
+    on each set of pin sites gets it (the pellet, not the gap around it).
+    """
+    bySites = {}
+    for component in block:
+        if component.p.pinIndices is None:
+            continue
+        sites = tuple(sorted(int(k) for k in component.p.pinIndices))
+        bySites.setdefault(sites, []).append(component)
+    for group in bySites.values():
+        carrier = min(group, key=lambda c: c.getBoundingCircleOuterDiameter(cold=True))
+        indices = np.asarray(carrier.p.pinIndices, dtype=int)
+        perPin = carrier.getVolume() / max(len(indices), 1)
+        if perPin > 0 and indices.size and indices.max() < len(pinPower):
+            carrier.p.pdens = pinPower[indices] / perPin
 
 
 _CELLS = re.compile(r"c(\d+)")
