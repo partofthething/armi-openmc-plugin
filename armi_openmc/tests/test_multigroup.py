@@ -163,3 +163,11 @@ def test_isoaaFixture():
     assert total.shape == (lib.numGroups,) and (total > 0).all()
     assert (np.asarray(xs.absorption[0]) <= total).all()
     assert factory.isFissionable(mat)
+
+
+def test_emptyGroupsGetDistinctBounds():
+    lib = FakeLibrary()
+    lib.neutronEnergyUpperBounds = np.array([1.0e7, 1.0e5, 1.0e5, 1.0e3])
+    bounds = multigroup.energyBounds(lib)
+    assert len(bounds) == 5
+    assert (np.diff(bounds) > 0).all()

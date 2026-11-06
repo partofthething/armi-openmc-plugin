@@ -40,15 +40,35 @@ CAPTURES = ("nGamma", "nalph", "np", "nd", "nt")
 
 
 def energyBounds(lib) -> np.ndarray:
-    """Group bounds of an ARMI library, ascending, in eV."""
+    """
+    Group bounds of an ARMI library, ascending, in eV.
+
+    A library condensed onto a structure whose bounds do not all fall between its fine groups
+    (ANL116 from SHEM-361, say) has empty groups of zero width. OpenMC needs strictly increasing
+    bounds, so each repeated bound is moved up by a part in a billion. Nothing reaches those
+    groups anyway: their cross sections and their χ are zero.
+    """
     upper = np.asarray(lib.neutronEnergyUpperBounds, dtype=float)
-    return np.concatenate([[LOWEST_ENERGY_EV], upper[::-1]])
+    bounds = np.concatenate([[LOWEST_ENERGY_EV], upper[::-1]])
+    repeated = 0
+    for i in range(1, len(bounds)):
+        if bounds[i] <= bounds[i - 1]:
+            bounds[i] = bounds[i - 1] * (1.0 + 1.0e-9)
+            repeated += 1
+    if repeated:
+        runLog.warning(
+            f"OpenMC multigroup: the library has {repeated} empty (zero-width) groups; "
+            "their bounds are moved apart by a part in 1e9",
+            single=True,
+        )
+    return bounds
 
 
 def _vector(values, nGroups):
     if values is None:
         return np.zeros(nGroups)
-    return np.asarray(values, dtype=float).reshape(nGroups, -1)[:, 0]
+    # an empty group of a library can hold NaN (zero flux weight): it carries nothing
+    return np.nan_to_num(np.asarray(values, dtype=float).reshape(nGroups, -1)[:, 0])
 
 
 def _matrix(values, nGroups):
@@ -56,7 +76,7 @@ def _matrix(values, nGroups):
     if values is None:
         return np.zeros((nGroups, nGroups))
     dense = values.toarray() if hasattr(values, "toarray") else np.asarray(values, dtype=float)
-    return dense.reshape(nGroups, nGroups)
+    return np.nan_to_num(dense.reshape(nGroups, nGroups))
 
 
 class MultigroupMaterialFactory:
