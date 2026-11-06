@@ -79,7 +79,10 @@ class CoreModelBuilder:
         self.isHex = isinstance(self.grid, grids.HexGrid)
         if options.multigroup:
             self.mapper = None
-            self.materials = MultigroupMaterialFactory(multigroupLibrary(core, options))
+            self.materials = MultigroupMaterialFactory(
+                multigroupLibrary(core, options),
+                transportCorrected=options.multigroupScattering == "transport-corrected",
+            )
         else:
             self.mapper = NuclideMapper(options.crossSectionsPath)
             self.materials = MaterialFactory(self.mapper, options.thermalScattering)

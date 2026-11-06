@@ -49,8 +49,10 @@ CONF_PLOT = "openmcPlotGeometry"
 CONF_REUSE = "openmcReuseStatepoint"
 CONF_ENERGY_MODE = "openmcEnergyMode"
 CONF_MG_LIBRARY = "openmcMultigroupLibrary"
+CONF_MG_SCATTERING = "openmcMultigroupScattering"
 
 ENERGY_MODES = ["continuous-energy", "multigroup"]
+MG_SCATTERING = ["legendre", "transport-corrected"]
 
 BOUNDARIES = ["vacuum", "reflective"]
 
@@ -346,6 +348,20 @@ def defineSettings():
                 "on the core (made by the case's cross section interface)."
             ),
         ),
+        setting.Setting(
+            CONF_MG_SCATTERING,
+            default="legendre",
+            label="Multigroup scattering",
+            description=(
+                "legendre: every Legendre order of the ISOTXS. OpenMC clips the negative part of "
+                "each group-to-group kernel, which in fine group structures (hundreds of groups "
+                "and up) makes forward scattering far too isotropic and the core leak too little. "
+                "transport-corrected: isotropic scattering with each group's P1 out-scattering "
+                "removed from its total and its self-scatter (outflow transport correction); "
+                "positive by construction, and the better choice for fine groups."
+            ),
+            options=MG_SCATTERING,
+        ),
     ]
 
 
@@ -411,6 +427,11 @@ def defineSettingEditors(cs):
             **common,
             "order": 6,
             "widget": "path",
+            "showWhen": {"setting": CONF_ENERGY_MODE, "equals": "multigroup"},
+        },
+        CONF_MG_SCATTERING: {
+            **common,
+            "order": 7,
             "showWhen": {"setting": CONF_ENERGY_MODE, "equals": "multigroup"},
         },
     }

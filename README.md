@@ -88,7 +88,9 @@ taken from the ISOTXS library the case's lattice physics put on the core (any `x
 DRAGON or MC2) or from the file named by `openmcMultigroupLibrary`. That is exactly the problem an
 ISOTXS-fed deterministic core solver is given, solved here without its diffusion or SP<sub>N</sub>
 approximations or a spatial mesh. A difference from the deterministic core is the core solver's
-error; a difference from a continuous-energy run is the cross sections' error.
+error. A difference from a continuous-energy run is the cross sections' error, including that of
+the multigroup approximation itself: flux-weighted group totals leak too little from a small fast
+core unless the groups resolve the structural resonance windows (ECCO-1968).
 
 ```yaml
 xsKernel: DRAGON            # or any lattice code that makes an ISOTXS
@@ -97,9 +99,13 @@ openmcEnergyMode: multigroup
 openmcBlockModel: homogenized
 ```
 
-Total and absorption are taken as the library gives them, flux-weighted. The P<sub>0</sub> and
-P<sub>1</sub> scattering matrices are used as production matrices, with a multiplicity that
-accounts for (n,2n). ν-fission is a full group-to-group matrix, so each nuclide keeps its own χ. The
+Total and absorption are taken as the library gives them, flux-weighted. Every Legendre order of
+the scattering matrices is used as a production matrix, with a multiplicity that accounts for
+(n,2n). OpenMC clips the negative part of each group-to-group Legendre kernel; in fine group
+structures (hundreds of groups and up) much of the scattering is in strongly forward transfers
+whose kernels go negative, and the clipped data leak far too little. For those use
+`openmcMultigroupScattering: transport-corrected`: isotropic scattering, each group's P<sub>1</sub>
+out-scattering removed from its total and its self-scatter. ν-fission is a full group-to-group matrix, so each nuclide keeps its own χ. The
 data go into `mgxs.h5` beside `model.xml` in the run directory (`armi_openmc.multigroup`).
 
 ## Documentation

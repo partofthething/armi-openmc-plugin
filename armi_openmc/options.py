@@ -52,6 +52,7 @@ class OpenMCOptions:
 
     energyMode: str = "continuous-energy"
     multigroupLibrary: str = ""
+    multigroupScattering: str = "legendre"
 
     _SETTINGS = {
         "particles": S.CONF_PARTICLES,
@@ -88,6 +89,7 @@ class OpenMCOptions:
         "reuseStatepoint": S.CONF_REUSE,
         "energyMode": S.CONF_ENERGY_MODE,
         "multigroupLibrary": S.CONF_MG_LIBRARY,
+        "multigroupScattering": S.CONF_MG_SCATTERING,
     }
 
     @classmethod
