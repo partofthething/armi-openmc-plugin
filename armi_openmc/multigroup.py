@@ -12,7 +12,7 @@ solver's; a difference between this run and the continuous-energy one is the cro
 Per block composition, :py:class:`MultigroupMaterialFactory` makes one ``openmc.XSdata``:
 
 * total and absorption (fission plus every capture reaction), flux-weighted as in the ISOTXS;
-* the P\\ :sub:`0` and P\\ :sub:`1` scattering matrices (Legendre order 1), as *production*
+* the scattering matrices to the highest Legendre order the library has, as *production*
   matrices -- the ISOTXS total scattering matrix counts the two neutrons of (n,2n) -- with a
   multiplicity matrix that makes total = absorption + scattering;
 * ν-fission as a full group-to-group matrix, the sum over nuclides of N ν σ\\ :sub:`f` χ, so
@@ -64,6 +64,11 @@ def energyBounds(lib) -> np.ndarray:
     return bounds
 
 
+def _nuclides(lib):
+    nuclides = getattr(lib, "nuclides", None)
+    return list(nuclides) if nuclides is not None else list(lib.values())
+
+
 def _vector(values, nGroups):
     if values is None:
         return np.zeros(nGroups)
@@ -91,13 +96,19 @@ class MultigroupMaterialFactory:
         Number densities below this (atoms/barn-cm) are left out.
     """
 
-    def __init__(self, lib, traceDensity=0.0):
+    def __init__(self, lib, traceDensity=0.0, transportCorrected=False):
         self.lib = lib
+        #: Isotropic scattering with the outflow transport correction instead of Legendre moments.
+        self.transportCorrected = transportCorrected
         self.nGroups = lib.numGroups
         self.bounds = energyBounds(lib)
         self.groups = openmc.mgxs.EnergyGroups(self.bounds)
         self.library = openmc.MGXSLibrary(self.groups)
         self.traceDensity = traceDensity
+        #: Legendre order of the scattering: the highest moment any nuclide of the library has.
+        self.order = max(
+            (max(n.micros.higherOrderScatter or {0: None}) for n in _nuclides(lib)), default=0
+        )
         self.materials = []
         self._xsdata = {}
         self._fissionable = set()
@@ -140,7 +151,7 @@ class MultigroupMaterialFactory:
     def report(self):
         runLog.info(
             f"OpenMC multigroup: {len(self.materials)} block materials on {len(self._xsdata)} "
-            f"macroscopic cross section sets, {self.nGroups} groups"
+            f"macroscopic cross section sets, {self.nGroups} groups, P{self.order} scattering"
         )
         for label, density in sorted(self._missing.items(), key=lambda kv: -kv[1]):
             runLog.warning(
@@ -158,7 +169,8 @@ class MultigroupMaterialFactory:
         G = self.nGroups
         total, absorption, fission, kappa = (np.zeros(G) for _ in range(4))
         nuFission = np.zeros((G, G))  # [from, to]
-        scatter = np.zeros((2, G, G))  # [order, to, from]
+        order = self.order
+        scatter = np.zeros((order + 1, G, G))  # [order, to, from]
         for nucName, density in densities.items():
             base = nuclideBases.byName.get(nucName)
             label = f"{base.label if base is not None else nucName}{suffix}"
@@ -188,8 +200,19 @@ class MultigroupMaterialFactory:
                 kappa += density * sigF * kappaEV
             scatter[0] += density * _matrix(micros.totalScatter, G)
             higher = micros.higherOrderScatter or {}
-            if 1 in higher:
-                scatter[1] += density * _matrix(higher[1], G)
+            for moment in range(1, order + 1):
+                if moment in higher:
+                    scatter[moment] += density * _matrix(higher[moment], G)
+
+        if self.transportCorrected and order >= 1:
+            # Outflow transport correction: remove each group's P1 out-scattering from its total and
+            # from its within-group scattering, and scatter isotropically. Avoids Legendre
+            # distributions that go negative (mean cosine over 1/3), which OpenMC clips to zero.
+            outflow = scatter[1].sum(axis=0)
+            total = total - outflow
+            scatter = scatter[:1].copy()
+            scatter[0][np.diag_indices(G)] -= outflow
+            order = 0
 
         # The production matrix counts (n,2n) twice; the multiplicity matrix makes the collision
         # probabilities right (total = absorption + scattering).
@@ -201,7 +224,7 @@ class MultigroupMaterialFactory:
         multiplicity = np.where(multiplicity > 0.0, multiplicity, 1.0)
 
         xs = openmc.XSdata(name, self.groups, temperatures=[DATA_TEMPERATURE])
-        xs.order = 1
+        xs.order = order
         xs.set_total(total, temperature=DATA_TEMPERATURE)
         xs.set_absorption(absorption, temperature=DATA_TEMPERATURE)
         # OpenMC wants [from, to, order]

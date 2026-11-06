@@ -171,3 +171,24 @@ def test_emptyGroupsGetDistinctBounds():
     bounds = multigroup.energyBounds(lib)
     assert len(bounds) == 5
     assert (np.diff(bounds) > 0).all()
+
+
+def test_transportCorrection(library):
+    """Isotropic scattering with the P1 out-scattering taken off the total and the in-group term."""
+    plain = multigroup.MultigroupMaterialFactory(library)
+    plain.forBlock(FakeBlock("a", {"NA23": 0.02}))
+    corrected = multigroup.MultigroupMaterialFactory(library, transportCorrected=True)
+    corrected.forBlock(FakeBlock("a", {"NA23": 0.02}))
+    (p,), (c,) = plain.library.xsdatas, corrected.library.xsdatas
+    assert c.order == 0 and p.order == 1
+    outflow = 0.02 * np.array([0.2, 0.1])  # column sums of Na-23's P1 matrix
+    np.testing.assert_allclose(np.asarray(c.total[0]), np.asarray(p.total[0]) - outflow)
+    np.testing.assert_allclose(np.asarray(c.absorption[0]), np.asarray(p.absorption[0]))
+    within = np.diagonal(np.asarray(c.scatter_matrix[0])[:, :, 0])
+    np.testing.assert_allclose(
+        within, np.diagonal(np.asarray(p.scatter_matrix[0])[:, :, 0]) - outflow
+    )
+
+
+def test_orderFollowsTheLibrary(library):
+    assert multigroup.MultigroupMaterialFactory(library).order == 1
