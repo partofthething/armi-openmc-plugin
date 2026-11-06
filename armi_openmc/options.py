@@ -50,6 +50,9 @@ class OpenMCOptions:
     plotGeometry: bool = False
     reuseStatepoint: bool = False
 
+    energyMode: str = "continuous-energy"
+    multigroupLibrary: str = ""
+
     _SETTINGS = {
         "particles": S.CONF_PARTICLES,
         "batches": S.CONF_BATCHES,
@@ -83,6 +86,8 @@ class OpenMCOptions:
         "runDir": S.CONF_RUN_DIR,
         "plotGeometry": S.CONF_PLOT,
         "reuseStatepoint": S.CONF_REUSE,
+        "energyMode": S.CONF_ENERGY_MODE,
+        "multigroupLibrary": S.CONF_MG_LIBRARY,
     }
 
     @classmethod
@@ -97,11 +102,19 @@ class OpenMCOptions:
         slice_ = values.get("axialSlice")
         values["axialSlice"] = None if slice_ is None or slice_ < 0 else float(slice_)
         values["heterogeneousFlags"] = list(values.get("heterogeneousFlags") or [])
+        if values.get("multigroupLibrary") and not os.path.isabs(values["multigroupLibrary"]):
+            values["multigroupLibrary"] = os.path.join(
+                cs.inputDirectory, values["multigroupLibrary"]
+            )
         if values.get("runDir") and not os.path.isabs(values["runDir"]):
             values["runDir"] = os.path.join(cs.inputDirectory, values["runDir"])
         values.update(overrides)
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in values.items() if k in known})
+
+    @property
+    def multigroup(self) -> bool:
+        return self.energyMode == "multigroup"
 
     @property
     def crossSectionsPath(self) -> str:

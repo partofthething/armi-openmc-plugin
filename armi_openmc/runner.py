@@ -59,7 +59,6 @@ def command(options: OpenMCOptions, workdir, args=()):
     runner = resolveRunner(options)
     if runner == "native":
         return [options.executable, *openmcArgs[1:]], runner
-    dataDir = os.path.dirname(options.crossSectionsPath)
     cmd = [
         "docker",
         "run",
@@ -70,17 +69,19 @@ def command(options: OpenMCOptions, workdir, args=()):
         f"{os.getuid()}:{os.getgid()}",
         "-e",
         "HOME=/tmp",
-        "-e",
-        f"OPENMC_CROSS_SECTIONS={options.crossSectionsPath}",
         "-v",
         f"{workdir}:{workdir}",
-        "-v",
-        f"{dataDir}:{dataDir}:ro",
-        "-w",
-        workdir,
-        options.dockerImage,
-        *openmcArgs,
     ]
+    # a multigroup model carries its data in the run directory (mgxs.h5)
+    if not options.multigroup:
+        dataDir = os.path.dirname(options.crossSectionsPath)
+        cmd += [
+            "-e",
+            f"OPENMC_CROSS_SECTIONS={options.crossSectionsPath}",
+            "-v",
+            f"{dataDir}:{dataDir}:ro",
+        ]
+    cmd += ["-w", workdir, options.dockerImage, *openmcArgs]
     return cmd, runner
 
 
@@ -98,7 +99,9 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
     """
     workdir = os.path.abspath(workdir)
     cmd, runner = command(options, workdir, args)
-    env = dict(os.environ, OPENMC_CROSS_SECTIONS=options.crossSectionsPath)
+    env = dict(os.environ)
+    if not options.multigroup:
+        env["OPENMC_CROSS_SECTIONS"] = options.crossSectionsPath
     plotting = "-p" in args or "--plot" in args
     runLog.info(
         f"{'Plotting the geometry with' if plotting else 'Running'} OpenMC ({runner}) in {workdir}"

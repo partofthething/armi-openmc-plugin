@@ -47,6 +47,10 @@ CONF_PARTICLE_MESH_PITCH = "openmcParticleMeshPitch"
 CONF_RUN_DIR = "openmcRunDir"
 CONF_PLOT = "openmcPlotGeometry"
 CONF_REUSE = "openmcReuseStatepoint"
+CONF_ENERGY_MODE = "openmcEnergyMode"
+CONF_MG_LIBRARY = "openmcMultigroupLibrary"
+
+ENERGY_MODES = ["continuous-energy", "multigroup"]
 
 BOUNDARIES = ["vacuum", "reflective"]
 
@@ -320,6 +324,28 @@ def defineSettings():
                 "whose OpenMC finished but whose ARMI side did not."
             ),
         ),
+        setting.Setting(
+            CONF_ENERGY_MODE,
+            default="continuous-energy",
+            label="Energy treatment",
+            description=(
+                "continuous-energy: OpenMC's own nuclear data (openmcCrossSections). multigroup: "
+                "every block smeared, on macroscopic cross sections built from an ARMI ISOTXS "
+                "library (the one the case's lattice physics made, or openmcMultigroupLibrary) "
+                "and the block's number densities; solves exactly the multigroup problem a "
+                "deterministic core solver is given, without its spatial or angular approximations."
+            ),
+            options=ENERGY_MODES,
+        ),
+        setting.Setting(
+            CONF_MG_LIBRARY,
+            default="",
+            label="Multigroup library",
+            description=(
+                "ISOTXS file for the multigroup mode, relative to the case. Empty: the library "
+                "on the core (made by the case's cross section interface)."
+            ),
+        ),
     ]
 
 
@@ -380,5 +406,12 @@ def defineSettingEditors(cs):
         CONF_PARTICLE_MESH_PITCH: {**common, "order": 28, **particleOnly},
         CONF_RUN_DIR: {**common, "order": 70, "widget": "path", "pathKind": "dir"},
         CONF_PLOT: {**common, "order": 71},
+        CONF_ENERGY_MODE: {**common, "order": 5},
+        CONF_MG_LIBRARY: {
+            **common,
+            "order": 6,
+            "widget": "path",
+            "showWhen": {"setting": CONF_ENERGY_MODE, "equals": "multigroup"},
+        },
     }
     return editors

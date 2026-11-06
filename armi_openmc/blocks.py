@@ -182,10 +182,17 @@ class BlockBuilder:
 
     # ----------------------------------------------------------------------------------------
     def _homogenized(self, b):
-        mat = self.materials.make(f"{b.getName()}", b.getNumberDensities(), b.getAverageTempInC())
+        if hasattr(self.materials, "forBlock"):  # multigroup: macroscopic data of the whole block
+            mat = self.materials.forBlock(b)
+            fissionableMat = self.materials.isFissionable(mat)
+        else:
+            mat = self.materials.make(
+                f"{b.getName()}", b.getNumberDensities(), b.getAverageTempInC()
+            )
+            fissionableMat = _isFissionable(mat)
         cell = openmc.Cell(name=f"{b.getName()}", fill=mat)
         universe = openmc.Universe(name=b.getName(), cells=[cell])
-        fissionable = [cell] if _isFissionable(mat) else []
+        fissionable = [cell] if fissionableMat else []
         return BlockModel(b, universe, False, fissionable)
 
     def _heterogeneous(self, b):

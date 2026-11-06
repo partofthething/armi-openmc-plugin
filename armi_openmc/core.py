@@ -27,9 +27,26 @@ from armi.reactor import geometry, grids
 from armi_openmc import blocks as blockModels
 from armi_openmc.energy import energyFilterBounds
 from armi_openmc.materials import MaterialFactory, NuclideMapper
+from armi_openmc.multigroup import MultigroupMaterialFactory
 from armi_openmc.options import OpenMCOptions
 
 ROUND = 9
+#: The multigroup library of a multigroup-mode model, beside its model.xml.
+MGXS_FILE = "mgxs.h5"
+
+
+def multigroupLibrary(core, options: OpenMCOptions):
+    """The ISOTXS of the multigroup mode: ``openmcMultigroupLibrary``, else the core's own."""
+    if options.multigroupLibrary:
+        from armi.nuclearDataIO.cccc import isotxs
+
+        return isotxs.readBinary(options.multigroupLibrary)
+    if core.lib is None:
+        raise ValueError(
+            "OpenMC multigroup mode needs a cross section library: run a cross section kernel "
+            "(genXS with an xsKernel) or set openmcMultigroupLibrary to an ISOTXS"
+        )
+    return core.lib
 
 
 @dataclass
@@ -48,6 +65,8 @@ class CoreModel:
     blockModels: dict = field(default_factory=dict)
     #: Fraction of the full core the modeled domain represents (1 for full or unfolded cores).
     domainFraction: float = 1.0
+    #: The multigroup data of a multigroup-mode model, which the executer writes as MGXS_FILE.
+    multigroup: object = None
 
 
 class CoreModelBuilder:
@@ -58,8 +77,12 @@ class CoreModelBuilder:
         self.options = options
         self.grid = core.spatialGrid
         self.isHex = isinstance(self.grid, grids.HexGrid)
-        self.mapper = NuclideMapper(options.crossSectionsPath)
-        self.materials = MaterialFactory(self.mapper, options.thermalScattering)
+        if options.multigroup:
+            self.mapper = None
+            self.materials = MultigroupMaterialFactory(multigroupLibrary(core, options))
+        else:
+            self.mapper = NuclideMapper(options.crossSectionsPath)
+            self.materials = MaterialFactory(self.mapper, options.thermalScattering)
         self.blocks = blockModels.BlockBuilder(
             self.materials,
             blockModels.hexOrientationOf(self.grid) if self.isHex else "x",
@@ -95,9 +118,18 @@ class CoreModelBuilder:
         geometry_ = openmc.Geometry(openmc.Universe(name="root", cells=[root]))
 
         materials = openmc.Materials(self.materials.materials)
-        materials.cross_sections = opts.crossSectionsPath
         settings = self._settings(bounds, self._fissionableBounds(result, positions, bounds))
-        result.energyBounds = energyFilterBounds(opts.groupStructure)
+        if opts.multigroup:
+            materials.cross_sections = (
+                MGXS_FILE  # the executer writes it beside model.xml, with its full path
+            )
+            settings.energy_mode = "multi-group"
+            result.energyBounds = self.materials.bounds
+            result.multigroup = self.materials
+            self.materials.report()
+        else:
+            materials.cross_sections = opts.crossSectionsPath
+            result.energyBounds = energyFilterBounds(opts.groupStructure)
         tallies = self._tallies(result)
         result.model = openmc.Model(geometry_, materials, settings, tallies)
         if opts.plotGeometry:
@@ -134,7 +166,7 @@ class CoreModelBuilder:
         return positions, False
 
     def _heterogeneous(self, b):
-        if self.options.blockModel != "heterogeneous":
+        if self.options.multigroup or self.options.blockModel != "heterogeneous":
             return False
         flags = self.options.heterogeneousFlags
         if not flags:

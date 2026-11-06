@@ -79,6 +79,29 @@ python -m armi_openmc compare-xs ISOTXS-a ISOTXS-b
 
 Another app can register `armi_openmc.plugin.OpenMCPlugin` itself instead.
 
+### Multigroup mode: solving another code's cross sections
+
+With `openmcEnergyMode: multigroup`, the global flux run solves the case's own multigroup
+cross sections instead of continuous-energy data. Every block is smeared. Its macroscopic cross
+sections are its number densities times the microscopic cross sections of its cross section ID,
+taken from the ISOTXS library the case's lattice physics put on the core (any `xsKernel`, e.g.
+DRAGON or MC2) or from the file named by `openmcMultigroupLibrary`. That is exactly the problem an
+ISOTXS-fed deterministic core solver is given, solved here without its diffusion or SP<sub>N</sub>
+approximations or a spatial mesh. A difference from the deterministic core is the core solver's
+error; a difference from a continuous-energy run is the cross sections' error.
+
+```yaml
+xsKernel: DRAGON            # or any lattice code that makes an ISOTXS
+neutronicsKernel: OpenMC
+openmcEnergyMode: multigroup
+openmcBlockModel: homogenized
+```
+
+Total and absorption are taken as the library gives them, flux-weighted. The P<sub>0</sub> and
+P<sub>1</sub> scattering matrices are used as production matrices, with a multiplicity that
+accounts for (n,2n). ν-fission is a full group-to-group matrix, so each nuclide keeps its own χ. The
+data go into `mgxs.h5` beside `model.xml` in the run directory (`armi_openmc.multigroup`).
+
 ## Documentation
 
 Published at https://partofthething.github.io/armi-openmc-plugin/ (built and deployed by

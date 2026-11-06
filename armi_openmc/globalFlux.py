@@ -14,7 +14,7 @@ from armi.physics.neutronics.globalFlux import globalFluxInterface as gfi
 from armi.physics.neutronics.settings import CONF_NEUTRONICS_KERNEL
 
 from armi_openmc import runner
-from armi_openmc.core import CoreModelBuilder
+from armi_openmc.core import MGXS_FILE, CoreModelBuilder
 from armi_openmc.options import OpenMCOptions
 from armi_openmc.results import CoreResults
 from armi_openmc.settings import KERNEL_NAME
@@ -57,7 +57,18 @@ class OpenMCExecuter(gfi.GlobalFluxExecuter):
         coreModel = CoreModelBuilder(self.r.core, opts.openmc).build()
         modelPath = os.path.join(workdir, "model.xml")
         previous = _read(modelPath)
+        if coreModel.multigroup is not None:
+            coreModel.model.materials.cross_sections = os.path.abspath(
+                os.path.join(workdir, MGXS_FILE)
+            )
         coreModel.model.export_to_model_xml(modelPath)
+        if coreModel.multigroup is not None:
+            # the data are part of the model: a changed library is a changed model
+            digestPath = os.path.join(workdir, MGXS_FILE + ".sha1")
+            previous = previous if _read(digestPath) == coreModel.multigroup.digest else None
+            coreModel.multigroup.export(os.path.join(workdir, MGXS_FILE))
+            with open(digestPath, "w") as f:
+                f.write(coreModel.multigroup.digest)
         statepoint = None
         if opts.openmc.reuseStatepoint and previous is not None and previous == _read(modelPath):
             statepoint = runner.lastStatepoint(workdir)

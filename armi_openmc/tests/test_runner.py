@@ -17,6 +17,16 @@ def test_dockerContainersAreNamedAfterTheirRun(tmp_path):
     assert cmd[-3:] == ["openmc", "-s", "2"]
 
 
+def test_multigroupRunsNeedNoContinuousEnergyData(tmp_path):
+    """A multigroup model carries its data in its run directory: no library to point at or mount."""
+    options = OpenMCOptions(runner="docker", crossSections="/nowhere/cross_sections.xml", threads=2)
+    options.energyMode = "multigroup"
+    cmd, _ = runner.command(options, tmp_path)
+    assert not any("OPENMC_CROSS_SECTIONS" in part for part in cmd)
+    assert f"{tmp_path}:{tmp_path}" in cmd
+    assert cmd[-3:] == ["openmc", "-s", "2"]
+
+
 def test_smearingRepresentativeBlocksAreFlagged():
     from armi import settings
     from armi.testing import mockRunLogs
