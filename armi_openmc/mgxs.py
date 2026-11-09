@@ -134,6 +134,7 @@ class XSModelBuilder:
         opts = self.options
         expansion = {n: self.mapper.expand(n) for n in sorted(set(nuclides))}
         expansion = {n: e for n, e in expansion.items() if e}
+        self.mapper.reportMissing()
         trace = {n: opts.xsTraceDensity for n in expansion}
         materials = MaterialFactory(self.mapper, opts.thermalScattering, traceNuclides=trace)
         builder = blockModels.BlockBuilder(materials, self.hexOrientation, options=opts)

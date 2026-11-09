@@ -106,8 +106,11 @@ Symmetry:
   placing each assembly's universe again at its symmetric positions.
 
 A hexagonal core is bounded by a cylinder just around its assemblies, or of
-``openmcCoreRadius``; ``openmcOuterFill`` names a block type whose composition fills the space
-between the assemblies and that cylinder (a permanent side reflector, for instance).
+``openmcCoreRadius``; a Cartesian core by the box of its lattice, or by a cylinder of
+``openmcCoreRadius`` around it (assemblies in a pool or a drum). ``openmcOuterFill`` names a block
+type whose composition fills the space between the assemblies and that boundary (a permanent side
+reflector, the water of the pool). The block can be in the core or only in an assembly design of
+the blueprints that the core map does not load.
 
 Boundaries are vacuum by default; ``openmcTopBoundary``, ``openmcBottomBoundary`` and
 ``openmcRadialBoundary`` change them (C5G7 uses a reflective bottom). ``openmcAxialSlice``

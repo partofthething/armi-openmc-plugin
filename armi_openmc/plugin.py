@@ -4,15 +4,15 @@ from armi import plugins
 
 
 class OpenMCPlugin(plugins.ArmiPlugin):
-    """OpenMC as ARMI's global flux solver and lattice physics code."""
+    """OpenMC as ARMI's global flux solver, lattice physics code and depletion solver."""
 
     @staticmethod
     @plugins.HOOKIMPL
     def exposeInterfaces(cs):
-        from armi_openmc import globalFlux, latticePhysics
+        from armi_openmc import depletion, globalFlux, latticePhysics
 
         info = []
-        for mod in (latticePhysics, globalFlux):
+        for mod in (latticePhysics, depletion, globalFlux):
             info += plugins.collectInterfaceDescriptions(mod, cs)
         return info
 

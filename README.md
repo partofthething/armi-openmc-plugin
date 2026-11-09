@@ -7,12 +7,13 @@ reactor. It is written against the partofthething fork of ARMI (2.0+).
 Documentation: https://partofthething.github.io/armi-openmc-plugin/
 Source and issues: https://github.com/partofthething/armi-openmc-plugin
 
-It does two jobs:
+It does three jobs:
 
 | Mode | Setting | What it does |
 |---|---|---|
 | **Global flux** | `neutronicsKernel: OpenMC` | A whole-core eigenvalue run at every time node: `keff` (with its standard deviation), block `power`, `pdens`, `flux` and multigroup `mgFlux`, and optionally pin powers (`linPowByPin`, `openmcPinPowers`). |
 | **Cross sections** | `xsKernel: OpenMC` | For each cross section group, a model of its representative block (an infinite lattice, or a colorset with its `driverID`), tallied into microscopic multigroup cross sections in the case's group structure and written as an **ISOTXS** that any ARMI flux solver can use. |
+| **Depletion** | `openmcDepletion: true` | At every time node, one `openmc.deplete` step (CE/CM by default) over the burn step that just ended, on every depletable component, with the full chain's number densities written back onto the components and block burnup updated. Pairs with the global flux mode, which then solves the depleted core. |
 
 ## Geometry
 
@@ -77,7 +78,9 @@ python -m armi_openmc openmc-xs case.yaml --compare ISOTXS-other   # make an ISO
 python -m armi_openmc compare-xs ISOTXS-a ISOTXS-b
 ```
 
-Another app can register `armi_openmc.plugin.OpenMCPlugin` itself instead.
+Another app can register `armi_openmc.plugin.OpenMCPlugin` itself instead, or a case can add it
+to plain ARMI with the fork's `plugins` setting (`plugins: [armi_openmc.plugin.OpenMCPlugin]`) and
+run with `python -m armi run case.yaml`.
 
 ### Multigroup mode: solving another code's cross sections
 
@@ -112,7 +115,7 @@ data go into `mgxs.h5` beside `model.xml` in the run directory (`armi_openmc.mul
 
 Published at https://partofthething.github.io/armi-openmc-plugin/ (built and deployed by
 `.github/workflows/docs.yaml` on every push to main). Sphinx docs (Book theme) in `doc/`: usage, how the models and cross sections are made, the
-benchmarks with figures, the settings reference, and the roadmap (depletion, variance reduction,
+benchmarks with figures, the settings reference, and the roadmap (variance reduction,
 richer coupling back onto ARMI).
 
 ```bash

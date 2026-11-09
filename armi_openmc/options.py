@@ -54,6 +54,12 @@ class OpenMCOptions:
     multigroupLibrary: str = ""
     multigroupScattering: str = "legendre"
 
+    depletionChain: str = ""
+    depletionIntegrator: str = "cecm"
+    depletionReactionRates: str = "flux"
+    depletionGroups: str = "SHEM-361"
+    python: str = "python"
+
     _SETTINGS = {
         "particles": S.CONF_PARTICLES,
         "batches": S.CONF_BATCHES,
@@ -90,6 +96,11 @@ class OpenMCOptions:
         "energyMode": S.CONF_ENERGY_MODE,
         "multigroupLibrary": S.CONF_MG_LIBRARY,
         "multigroupScattering": S.CONF_MG_SCATTERING,
+        "depletionChain": S.CONF_DEPLETION_CHAIN,
+        "depletionIntegrator": S.CONF_DEPLETION_INTEGRATOR,
+        "depletionReactionRates": S.CONF_DEPLETION_RATES,
+        "depletionGroups": S.CONF_DEPLETION_GROUPS,
+        "python": S.CONF_PYTHON,
     }
 
     @classmethod
@@ -108,6 +119,8 @@ class OpenMCOptions:
             values["multigroupLibrary"] = os.path.join(
                 cs.inputDirectory, values["multigroupLibrary"]
             )
+        if values.get("depletionChain") and not os.path.isabs(values["depletionChain"]):
+            values["depletionChain"] = os.path.join(cs.inputDirectory, values["depletionChain"])
         if values.get("runDir") and not os.path.isabs(values["runDir"]):
             values["runDir"] = os.path.join(cs.inputDirectory, values["runDir"])
         values.update(overrides)
@@ -126,5 +139,16 @@ class OpenMCOptions:
             raise FileNotFoundError(
                 f"OpenMC nuclear data not found at {path}. Set the {S.CONF_CROSS_SECTIONS} setting "
                 "or the OPENMC_CROSS_SECTIONS environment variable."
+            )
+        return os.path.abspath(path)
+
+    @property
+    def depletionChainPath(self) -> str:
+        """The depletion chain XML, from the option or the OPENMC_CHAIN_FILE variable."""
+        path = self.depletionChain or os.environ.get("OPENMC_CHAIN_FILE", "")
+        if not path or not os.path.exists(path):
+            raise FileNotFoundError(
+                f"OpenMC depletion chain not found at {path!r}. Set the {S.CONF_DEPLETION_CHAIN} "
+                "setting or the OPENMC_CHAIN_FILE environment variable."
             )
         return os.path.abspath(path)

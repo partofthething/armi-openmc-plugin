@@ -51,14 +51,29 @@ def resolveRunner(options: OpenMCOptions):
     )
 
 
-def command(options: OpenMCOptions, workdir, args=()):
-    """The command line that runs OpenMC in ``workdir``."""
+def command(options: OpenMCOptions, workdir, args=(), program=None, mounts=(), env=None):
+    """
+    The command line that runs OpenMC in ``workdir``.
+
+    Parameters
+    ----------
+    program : list of str, optional
+        What to run instead of the ``openmc`` solver, e.g. ``["python", "script.py"]`` for a
+        script that drives OpenMC through its Python API (depletion). ``args`` follow it.
+    mounts : iterable of str
+        More host directories the container needs, mounted read-only at their own paths.
+    env : dict, optional
+        More environment variables for the container.
+    """
     workdir = os.path.abspath(workdir)
     threads = options.threads or physicalCores()
-    openmcArgs = ["openmc", "-s", str(threads), *args]
     runner = resolveRunner(options)
+    if program is None:
+        program = [options.executable if runner == "native" else "openmc", "-s", str(threads)]
+    elif runner == "native" and program[0] == "python":
+        program = [options.python, *program[1:]]
     if runner == "native":
-        return [options.executable, *openmcArgs[1:]], runner
+        return [*program, *args], runner
     cmd = [
         "docker",
         "run",
@@ -81,7 +96,13 @@ def command(options: OpenMCOptions, workdir, args=()):
             "-v",
             f"{dataDir}:{dataDir}:ro",
         ]
-    cmd += ["-w", workdir, options.dockerImage, *openmcArgs]
+    for mount in mounts:
+        mount = os.path.abspath(mount)
+        if mount != workdir:
+            cmd += ["-v", f"{mount}:{mount}:ro"]
+    for key, value in (env or {}).items():
+        cmd += ["-e", f"{key}={value}"]
+    cmd += ["-w", workdir, options.dockerImage, *program, *args]
     return cmd, runner
 
 
@@ -97,11 +118,38 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
 
     The solver's screen output goes to ``workdir/openmc.out``; a failure raises with its tail.
     """
+    plotting = "-p" in args or "--plot" in args
+    execute(options, workdir, args=args, logName=logName, echo=echo and not plotting)
+    if plotting:
+        return None
+    statepoint = lastStatepoint(workdir)
+    if statepoint is None:
+        raise OpenMCRunError(f"OpenMC wrote no statepoint in {workdir}")
+    return statepoint
+
+
+def execute(
+    options: OpenMCOptions,
+    workdir,
+    args=(),
+    logName="openmc.out",
+    echo=True,
+    program=None,
+    mounts=(),
+    env=None,
+):
+    """
+    Run OpenMC, or a ``program`` that drives it, in ``workdir`` (natively or in the container).
+
+    The screen output goes to ``workdir/<logName>`` and, when ``echo``, to ours; a failure raises
+    with its tail.
+    """
     workdir = os.path.abspath(workdir)
-    cmd, runner = command(options, workdir, args)
-    env = dict(os.environ)
+    cmd, runner = command(options, workdir, args, program=program, mounts=mounts, env=env)
+    hostEnv = dict(os.environ)
+    hostEnv.update(env or {})
     if not options.multigroup:
-        env["OPENMC_CROSS_SECTIONS"] = options.crossSectionsPath
+        hostEnv["OPENMC_CROSS_SECTIONS"] = options.crossSectionsPath
     plotting = "-p" in args or "--plot" in args
     runLog.info(
         f"{'Plotting the geometry with' if plotting else 'Running'} OpenMC ({runner}) in {workdir}"
@@ -114,7 +162,7 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
         proc = subprocess.Popen(
             cmd,
             cwd=workdir,
-            env=env,
+            env=hostEnv,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -123,7 +171,7 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
         try:
             for line in proc.stdout:
                 log.write(line)
-                if echo and not plotting:
+                if echo:
                     print(f"[openmc] {line}", end="", flush=True)
             proc.wait()
         except BaseException:
@@ -138,12 +186,6 @@ def run(options: OpenMCOptions, workdir, args=(), logName="openmc.out", echo=Tru
         raise OpenMCRunError(
             f"OpenMC failed in {workdir} (exit {proc.returncode}):\n" + "\n".join(tail)
         )
-    if plotting:
-        return None
-    statepoint = lastStatepoint(workdir)
-    if statepoint is None:
-        raise OpenMCRunError(f"OpenMC wrote no statepoint in {workdir}")
-    return statepoint
 
 
 def lastStatepoint(workdir):

@@ -137,7 +137,7 @@ class MultigroupMaterialFactory:
     def isFissionable(self, mat) -> bool:
         return mat is not None and mat.id in self._fissionable
 
-    def make(self, name, numberDensities, temperatureInC, reuse=False):
+    def make(self, name, numberDensities, temperatureInC, reuse=False, owner=None):
         raise ValueError(
             f"OpenMC multigroup mode smears whole blocks; {name} would need a component material "
             "(use openmcBlockModel: homogenized)"

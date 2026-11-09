@@ -70,3 +70,23 @@ def test_emptyPositionsHoldTheOuterFill(fftf, options):
     assert not any(u.name == "void" for u in universes)
     assert any(u.name == "outer fill" for u in universes)
     assert root.fill.outer.name == "outer fill"
+
+
+@needsData
+def test_cartesianCoreInACylinder(c5g7, options):
+    """A square lattice inside a larger cylinder, the space between filled (a pool, a drum)."""
+    import pytest
+
+    options.symmetry = "full"
+    options.blockModel = "homogenized"
+    options.coreRadius = 200.0
+    fill = next(iter(c5g7.core.iterBlocks())).getType()
+    options.outerFill = fill
+    model = CoreModelBuilder(c5g7.core, options).build()
+    root = next(iter(model.model.geometry.root_universe.cells.values()))
+    cylinders = [s for s in root.region.get_surfaces().values() if isinstance(s, openmc.ZCylinder)]
+    assert [c.r for c in cylinders] == [200.0]
+    assert root.fill.outer.name == "outer fill"
+    options.coreRadius = 10.0
+    with pytest.raises(ValueError, match="cuts through"):
+        CoreModelBuilder(c5g7.core, options).build()

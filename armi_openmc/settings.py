@@ -50,9 +50,24 @@ CONF_REUSE = "openmcReuseStatepoint"
 CONF_ENERGY_MODE = "openmcEnergyMode"
 CONF_MG_LIBRARY = "openmcMultigroupLibrary"
 CONF_MG_SCATTERING = "openmcMultigroupScattering"
+CONF_DEPLETION = "openmcDepletion"
+CONF_DEPLETION_CHAIN = "openmcDepletionChain"
+CONF_DEPLETION_INTEGRATOR = "openmcDepletionIntegrator"
+CONF_PYTHON = "openmcPython"
+CONF_DEPLETION_RATES = "openmcDepletionReactionRates"
+CONF_DEPLETION_GROUPS = "openmcDepletionGroups"
 
 ENERGY_MODES = ["continuous-energy", "multigroup"]
 MG_SCATTERING = ["legendre", "transport-corrected"]
+#: openmc.deplete integrators by setting value; cecm (CE/CM) is OpenMC's usual choice.
+INTEGRATORS = {
+    "predictor": "PredictorIntegrator",
+    "cecm": "CECMIntegrator",
+    "celi": "CELIIntegrator",
+    "leqi": "LEQIIntegrator",
+    "epc-rk4": "EPCRK4Integrator",
+    "si-celi": "SICELIIntegrator",
+}
 
 BOUNDARIES = ["vacuum", "reflective"]
 
@@ -194,8 +209,10 @@ def defineSettings():
             default=0.0,
             label="Core radius (cm)",
             description=(
-                "Radius of the cylinder that bounds a hexagonal core model. Zero fits it just "
-                "around the outermost assemblies."
+                "Radius of the cylinder that bounds the core model. Zero: a hexagonal core is "
+                "bounded just around its outermost assemblies, a Cartesian one by the box of its "
+                "lattice. A Cartesian core inside a larger cylinder (a pool, a drum) has the "
+                "outer fill between its assemblies and the cylinder."
             ),
         ),
         setting.Setting(
@@ -204,7 +221,9 @@ def defineSettings():
             label="Fill outside the assemblies",
             description=(
                 "Block type whose homogenized composition fills the space between the assembly "
-                "lattice and the core boundary, e.g. a permanent side reflector. Blank: void."
+                "lattice and the core boundary, e.g. a permanent side reflector or the water of a "
+                "pool. Taken from the core, or else from an assembly design in the blueprints "
+                "that is not loaded. Blank: void."
             ),
         ),
         setting.Setting(
@@ -362,6 +381,69 @@ def defineSettings():
             ),
             options=MG_SCATTERING,
         ),
+        setting.Setting(
+            CONF_DEPLETION,
+            default=False,
+            label="Deplete with OpenMC",
+            description=(
+                "Burn the reactor with openmc.deplete: at every time node, the depletable "
+                "components are depleted over the step that just ended (transport and Bateman "
+                "solution in one OpenMC run) and their number densities, every nuclide of the "
+                "chain included, are written back onto them. Downtime between cycles is decayed "
+                "at zero power. Independent of the global flux kernel."
+            ),
+        ),
+        setting.Setting(
+            CONF_DEPLETION_CHAIN,
+            default="",
+            label="Depletion chain",
+            description=(
+                "OpenMC depletion chain XML, matched to the nuclear data library. Blank uses the "
+                "OPENMC_CHAIN_FILE environment variable."
+            ),
+        ),
+        setting.Setting(
+            CONF_DEPLETION_INTEGRATOR,
+            default="cecm",
+            label="Depletion integrator",
+            description=(
+                "openmc.deplete time integrator: predictor (one transport per step), cecm "
+                "(CE/CM predictor-corrector, two), celi, leqi, epc-rk4 or si-celi."
+            ),
+            options=list(INTEGRATORS),
+            enforcedOptions=True,
+        ),
+        setting.Setting(
+            CONF_DEPLETION_RATES,
+            default="flux",
+            label="Depletion reaction rates",
+            description=(
+                "flux: tally the flux in openmcDepletionGroups and collapse each nuclide's cross "
+                "sections with it, with direct tallies kept for fission and capture of the major "
+                "actinides (where self-shielding matters most); many times faster in burned fuel, "
+                "which carries hundreds of nuclides. direct: tally every reaction of every nuclide."
+            ),
+            options=["flux", "direct"],
+            enforcedOptions=True,
+        ),
+        setting.Setting(
+            CONF_DEPLETION_GROUPS,
+            default="SHEM-361",
+            label="Depletion flux groups",
+            description=(
+                "Group structure of the flux the reaction rates are collapsed with, by its OpenMC "
+                "name (openmc.mgxs.GROUP_STRUCTURES), e.g. SHEM-361, CASMO-70, VITAMIN-J-175."
+            ),
+        ),
+        setting.Setting(
+            CONF_PYTHON,
+            default="python",
+            label="Python with OpenMC",
+            description=(
+                "Python interpreter with the openmc package and its shared library, used by the "
+                "native runner for depletion. The docker runner uses the image's own."
+            ),
+        ),
     ]
 
 
@@ -433,6 +515,34 @@ def defineSettingEditors(cs):
             **common,
             "order": 7,
             "showWhen": {"setting": CONF_ENERGY_MODE, "equals": "multigroup"},
+        },
+        CONF_DEPLETION: {**common, "order": 80},
+        CONF_DEPLETION_CHAIN: {
+            **common,
+            "order": 81,
+            "widget": "path",
+            "showWhen": {"setting": CONF_DEPLETION, "equals": True},
+        },
+        CONF_DEPLETION_INTEGRATOR: {
+            **common,
+            "order": 82,
+            "showWhen": {"setting": CONF_DEPLETION, "equals": True},
+        },
+        CONF_DEPLETION_RATES: {
+            **common,
+            "order": 84,
+            "showWhen": {"setting": CONF_DEPLETION, "equals": True},
+        },
+        CONF_DEPLETION_GROUPS: {
+            **common,
+            "order": 85,
+            "showWhen": {"setting": CONF_DEPLETION_RATES, "equals": "flux"},
+        },
+        CONF_PYTHON: {
+            **common,
+            "order": 83,
+            "widget": "path",
+            "showWhen": {"setting": CONF_DEPLETION, "equals": True},
         },
     }
     return editors

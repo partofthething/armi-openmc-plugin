@@ -7,17 +7,15 @@ order:
 Depletion
 ---------
 
-Activate depletion through ``openmc.deplete``, so the plugin can burn the reactor as well as
-solve it:
+Done: coupled transport-depletion over ARMI's cycles and burn steps with ``openmc.deplete``
+(:doc:`usage`), its integrators as an option, the chain by setting, and the depleted number
+densities written back onto the components with burnup. Still to do:
 
-* coupled transport-depletion over ARMI's cycles and burn steps, with OpenMC's integrators
-  (predictor, CE/CM, CF4) as options;
-* a depletion chain matched to the data library, chosen by setting;
-* depleted number densities written back onto the ARMI components, with burnup, so ARMI's fuel
-  management, database and reports see them, and the results restartable from the ARMI
-  database;
-* depletion at pin resolution where the model is pin by pin, and per block where it is
-  homogenized.
+* restarting a depletion run from the ARMI database (the number densities are there; the
+  restart path is untested);
+* depletion at pin resolution where the model is pin by pin (today one material per component
+  per block), and of homogenized blocks;
+* reusing the depletion step's transport for the node's flux solve instead of running both.
 
 Variance reduction
 ------------------

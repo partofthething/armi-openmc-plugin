@@ -401,7 +401,7 @@ class BlockBuilder:
 
     def _material(self, b, c):
         return self.materials.make(
-            f"{b.getName()} {c.name}", c.getNumberDensities(), c.temperatureInC
+            f"{b.getName()} {c.name}", c.getNumberDensities(), c.temperatureInC, owner=c
         )
 
     @staticmethod

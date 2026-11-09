@@ -43,6 +43,9 @@ class NuclideMapper:
         self.available, self.thermalTables, self.dataPaths = _libraryContents(crossSectionsPath)
         self._cache = {}
         self._warned = set()
+        #: ARMI isotopes left out of the model because the library has no data for them.
+        self.missing = set()
+        self._reported = set()
 
     def expand(self, armiName):
         """
@@ -73,7 +76,9 @@ class NuclideMapper:
             # Some libraries have an element only as its natural evaluation (C0 in ENDF/B-VII.1).
             self._note(armiName, f"is carried by the natural-element evaluation {natural}")
             return [(natural, 1.0)]
-        self._warn(armiName, f"({name}) is not in the nuclear data library")
+        # Common in burned fuel (short-lived fission products): one summary, not a warning each.
+        self.missing.add(armiName)
+        runLog.debug(f"OpenMC: nuclide {armiName} ({name}) is not in the nuclear data library.")
         return []
 
     def _expandElement(self, armiName, symbol):
@@ -107,6 +112,18 @@ class NuclideMapper:
         if armiName not in self._warned:
             self._warned.add(armiName)
             runLog.warning(f"OpenMC: nuclide {armiName} {why}, so it is left out of the model.")
+
+    def reportMissing(self):
+        """Warn once about the isotopes left out since the last report, if any."""
+        new = sorted(self.missing - self._reported)
+        if not new:
+            return
+        self._reported.update(new)
+        shown = ", ".join(new[:8]) + (", ..." if len(new) > 8 else "")
+        runLog.warning(
+            f"OpenMC: {len(new)} nuclides are not in the nuclear data library and are left out of "
+            f"the model ({shown})."
+        )
 
     def toOpenMC(self, numberDensities):
         """ARMI {name: atoms/b-cm} to OpenMC {name: atoms/b-cm}, summing shared isotopes."""
@@ -154,9 +171,12 @@ class MaterialFactory:
         #: {ARMI name: density} added to every material that lacks the nuclide (XS generation).
         self.traceNuclides = traceNuclides or {}
         self.materials = []
+        #: {material id: the ARMI component it is made of}, for materials of exactly one component
+        #: (what depletion can write back to).
+        self.owners = {}
         self._shared = {}
 
-    def make(self, name, numberDensities, temperatureInC, reuse=False):
+    def make(self, name, numberDensities, temperatureInC, reuse=False, owner=None):
         """
         A material for these ARMI number densities, or None for a void.
 
@@ -172,6 +192,8 @@ class MaterialFactory:
             Return the material already made for identical densities and temperature, if any.
             For regions that are deliberately shared (particle layers of identical compacts),
             never for ones that may later need to change on their own.
+        owner : Component, optional
+            The one ARMI component this material is made of, recorded in ``owners``.
         """
         densities = {k: v for k, v in numberDensities.items() if v > 0.0}
         for nuc, trace in self.traceNuclides.items():
@@ -195,6 +217,8 @@ class MaterialFactory:
             for table in _thermalTables(_elementFractions(omc), self.mapper.thermalTables):
                 mat.add_s_alpha_beta(table)
         self.materials.append(mat)
+        if owner is not None:
+            self.owners[mat.id] = owner
         if key is not None:
             self._shared[key] = mat
         return mat

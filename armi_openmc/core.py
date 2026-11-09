@@ -133,6 +133,8 @@ class CoreModelBuilder:
         else:
             materials.cross_sections = opts.crossSectionsPath
             result.energyBounds = energyFilterBounds(opts.groupStructure)
+        if self.mapper is not None:
+            self.mapper.reportMissing()
         tallies = self._tallies(result)
         result.model = openmc.Model(geometry_, materials, settings, tallies)
         if opts.plotGeometry:
@@ -242,6 +244,15 @@ class CoreModelBuilder:
             ny = int(round((max(ys) - min(ys)) / py)) + 1
             lattice.universes = np.full((ny, nx), self._empty, dtype=object)
             extent = ("box", min(xs) - px / 2, max(xs) + px / 2, min(ys) - py / 2, max(ys) + py / 2)
+            if self.options.coreRadius:
+                # a cylinder around the square lattice, e.g. assemblies in a pool or a drum
+                reach = max(math.hypot(abs(x) + px / 2, abs(y) + py / 2) for x, y in coords)
+                if self.options.coreRadius < reach:
+                    raise ValueError(
+                        f"openmcCoreRadius {self.options.coreRadius} cm cuts through the "
+                        f"assemblies, whose corners reach {reach:.2f} cm"
+                    )
+                extent = ("circle", self.options.coreRadius)
         lattice.outer = self._empty
         grid = lattice.universes
         for (x, y), universe in coords.items():
@@ -258,8 +269,16 @@ class CoreModelBuilder:
             (b for b in self.core.iterBlocks() if b.getType() == self.options.outerFill), None
         )
         if block is None:
+            # an assembly design that is not loaded in the core, such as the water of a pool
+            blueprints = getattr(self.core.parent, "blueprints", None)
+            designs = blueprints.assemblies.values() if blueprints is not None else []
+            block = next(
+                (b for a in designs for b in a if b.getType() == self.options.outerFill), None
+            )
+        if block is None:
             raise ValueError(
-                f"openmcOuterFill: no block of type {self.options.outerFill} in the core"
+                f"openmcOuterFill: no block of type {self.options.outerFill} in the core "
+                "or in the blueprints' assembly designs"
             )
         mat = self.materials.make(
             f"outside the assemblies ({block.getType()})",
